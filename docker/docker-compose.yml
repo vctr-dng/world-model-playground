@@ -1,0 +1,39 @@
+services:
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:${MLFLOW_VERSION}
+    container_name: mlflow-server
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      MLFLOW_PORT: ${MLFLOW_PORT}
+    command:
+      - mlflow
+      - server
+      - --backend-store-uri
+      - sqlite:////mlflow-data/mlflow.db
+      - --artifacts-destination
+      - /mlflow-data/artifacts
+      - --serve-artifacts
+      - --host
+      - 0.0.0.0
+      - --port
+      - ${MLFLOW_PORT}
+    volumes:
+      - ./mlflow-data:/mlflow-data
+    ports:
+      - "${MLFLOW_BIND_ADDRESS:-0.0.0.0}:${MLFLOW_PORT}:${MLFLOW_PORT}"
+      - "127.0.0.1:${MLFLOW_PORT}:${MLFLOW_PORT}"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:${MLFLOW_PORT}/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+networks:
+  default:
+    name: mlflow-network

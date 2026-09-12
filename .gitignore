@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Graphify
+graphify-out/cost.json
+graphify-out/cache/
+
+# Training outputs
+runs/
+mlruns/

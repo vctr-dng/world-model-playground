@@ -1,0 +1,1156 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "opencode.json",
+      "file_type": "code",
+      "source_file": ".opencode/opencode.json",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "opencode_opencode",
+      "community": 0,
+      "norm_label": "opencode.json"
+    },
+    {
+      "label": "$schema",
+      "file_type": "code",
+      "source_file": ".opencode/opencode.json",
+      "source_location": "L2",
+      "_origin": "ast",
+      "id": "opencode_opencode_schema",
+      "community": 0,
+      "norm_label": "$schema"
+    },
+    {
+      "label": "plugin",
+      "file_type": "code",
+      "source_file": ".opencode/opencode.json",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "opencode_opencode_plugin",
+      "community": 0,
+      "norm_label": "plugin"
+    },
+    {
+      "label": ".opencode/plugins/graphify.js",
+      "file_type": "concept",
+      "source_file": ".opencode/opencode.json",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "ref_opencode_plugins_graphify_js",
+      "community": 0,
+      "norm_label": ".opencode/plugins/graphify.js"
+    },
+    {
+      "label": "package.json",
+      "file_type": "code",
+      "source_file": ".opencode/package.json",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "opencode_package",
+      "community": 7,
+      "norm_label": "package.json"
+    },
+    {
+      "label": "dependencies",
+      "file_type": "code",
+      "source_file": ".opencode/package.json",
+      "source_location": "L2",
+      "_origin": "ast",
+      "id": "opencode_package_dependencies",
+      "community": 7,
+      "norm_label": "dependencies"
+    },
+    {
+      "label": "@opencode-ai/plugin",
+      "file_type": "code",
+      "source_file": ".opencode/package.json",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "opencode_package_dependencies_opencode_ai_plugin",
+      "community": 7,
+      "norm_label": "@opencode-ai/plugin"
+    },
+    {
+      "label": "@opencode-ai/plugin",
+      "file_type": "concept",
+      "source_file": ".opencode/package.json",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "opencode_ai_plugin",
+      "community": 7,
+      "norm_label": "@opencode-ai/plugin"
+    },
+    {
+      "label": "graphify.js",
+      "file_type": "code",
+      "source_file": ".opencode/plugins/graphify.js",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "opencode_plugins_graphify",
+      "community": 1,
+      "norm_label": "graphify.js"
+    },
+    {
+      "label": "GraphifyPlugin()",
+      "file_type": "code",
+      "source_file": ".opencode/plugins/graphify.js",
+      "source_location": "L12",
+      "_origin": "ast",
+      "id": "opencode_plugins_graphify_graphifyplugin",
+      "community": 1,
+      "norm_label": "graphifyplugin()"
+    },
+    {
+      "label": "IMPORTANT: keep the reminder string free of backticks and $(...) constructs.",
+      "file_type": "rationale",
+      "source_file": ".opencode/plugins/graphify.js",
+      "source_location": "L4",
+      "_origin": "ast",
+      "id": "opencode_plugins_graphify_rationale_4",
+      "community": 1,
+      "norm_label": "important: keep the reminder string free of backticks and $(...) constructs."
+    },
+    {
+      "label": "random_agent.py",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "scripts_cartpole_random_agent",
+      "community": 4,
+      "norm_label": "random_agent.py"
+    },
+    {
+      "label": "parse_args()",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L21",
+      "_origin": "ast",
+      "id": "scripts_cartpole_random_agent_parse_args",
+      "community": 4,
+      "norm_label": "parse_args()"
+    },
+    {
+      "label": "Namespace",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "scripts_cartpole_random_agent_py_namespace",
+      "community": 4,
+      "norm_label": "namespace"
+    },
+    {
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L40",
+      "_origin": "ast",
+      "id": "scripts_cartpole_random_agent_main",
+      "community": 4,
+      "norm_label": "main()"
+    },
+    {
+      "label": "Run a random agent in parallel MJX CartpoleBalance environments.",
+      "file_type": "rationale",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "scripts_cartpole_random_agent_rationale_1",
+      "community": 4,
+      "norm_label": "run a random agent in parallel mjx cartpolebalance environments."
+    },
+    {
+      "label": "train_ppo.py",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo",
+      "community": 2,
+      "norm_label": "train_ppo.py"
+    },
+    {
+      "label": "parse_args()",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L29",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_parse_args",
+      "community": 9,
+      "norm_label": "parse_args()"
+    },
+    {
+      "label": "Namespace",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_py_namespace",
+      "community": 9,
+      "norm_label": "namespace"
+    },
+    {
+      "label": "resolve_checkpoint()",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L67",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_resolve_checkpoint",
+      "community": 5,
+      "norm_label": "resolve_checkpoint()"
+    },
+    {
+      "label": "Path",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "path",
+      "community": 5,
+      "norm_label": "path"
+    },
+    {
+      "label": "load_policy()",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L80",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_load_policy",
+      "community": 5,
+      "norm_label": "load_policy()"
+    },
+    {
+      "label": "scalar_metrics()",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L91",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_scalar_metrics",
+      "community": 10,
+      "norm_label": "scalar_metrics()"
+    },
+    {
+      "label": "evaluate_policy()",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L101",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_evaluate_policy",
+      "community": 2,
+      "norm_label": "evaluate_policy()"
+    },
+    {
+      "label": "render_policy()",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L121",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_render_policy",
+      "community": 2,
+      "norm_label": "render_policy()"
+    },
+    {
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L144",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_main",
+      "community": 2,
+      "norm_label": "main()"
+    },
+    {
+      "label": "Train a Brax PPO agent to solve MJX CartpoleBalance.",
+      "file_type": "rationale",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_rationale_1",
+      "community": 2,
+      "norm_label": "train a brax ppo agent to solve mjx cartpolebalance."
+    },
+    {
+      "label": "Returns a checkpoint directory, resolving a root to its latest step.",
+      "file_type": "rationale",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L68",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_rationale_68",
+      "community": 5,
+      "norm_label": "returns a checkpoint directory, resolving a root to its latest step."
+    },
+    {
+      "label": "Recreates the fixed PPO network and restores its parameters.",
+      "file_type": "rationale",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L81",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_rationale_81",
+      "community": 5,
+      "norm_label": "recreates the fixed ppo network and restores its parameters."
+    },
+    {
+      "label": "Converts scalar JAX metrics into values accepted by MLflow.",
+      "file_type": "rationale",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L92",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_rationale_92",
+      "community": 10,
+      "norm_label": "converts scalar jax metrics into values accepted by mlflow."
+    },
+    {
+      "label": "Evaluates a deterministic policy over a batch of environments.",
+      "file_type": "rationale",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L102",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_rationale_102",
+      "community": 2,
+      "norm_label": "evaluates a deterministic policy over a batch of environments."
+    },
+    {
+      "label": "Displays a deterministic policy in the live MuJoCo viewer.",
+      "file_type": "rationale",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L122",
+      "_origin": "ast",
+      "id": "scripts_cartpole_train_ppo_rationale_122",
+      "community": 2,
+      "norm_label": "displays a deterministic policy in the live mujoco viewer."
+    },
+    {
+      "label": "__init__.py",
+      "file_type": "code",
+      "source_file": "src/world_model_playground/__init__.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "src_world_model_playground_init",
+      "community": 12,
+      "norm_label": "__init__.py"
+    },
+    {
+      "label": "Shared utilities for World Model Playground experiments.",
+      "file_type": "rationale",
+      "source_file": "src/world_model_playground/__init__.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "src_world_model_playground_init_rationale_1",
+      "community": 12,
+      "norm_label": "shared utilities for world model playground experiments."
+    },
+    {
+      "label": "cartpole.py",
+      "file_type": "code",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "src_world_model_playground_cartpole",
+      "community": 11,
+      "norm_label": "cartpole.py"
+    },
+    {
+      "label": "positive_int()",
+      "file_type": "code",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L16",
+      "_origin": "ast",
+      "id": "src_world_model_playground_cartpole_positive_int",
+      "community": 9,
+      "norm_label": "positive_int()"
+    },
+    {
+      "label": "non_negative_int()",
+      "file_type": "code",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L23",
+      "_origin": "ast",
+      "id": "src_world_model_playground_cartpole_non_negative_int",
+      "community": 4,
+      "norm_label": "non_negative_int()"
+    },
+    {
+      "label": "load_cartpole()",
+      "file_type": "code",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L30",
+      "_origin": "ast",
+      "id": "src_world_model_playground_cartpole_load_cartpole",
+      "community": 8,
+      "norm_label": "load_cartpole()"
+    },
+    {
+      "label": "MjxEnv",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "mjxenv",
+      "community": 8,
+      "norm_label": "mjxenv"
+    },
+    {
+      "label": "run_live_rollout()",
+      "file_type": "code",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L37",
+      "_origin": "ast",
+      "id": "src_world_model_playground_cartpole_run_live_rollout",
+      "community": 6,
+      "norm_label": "run_live_rollout()"
+    },
+    {
+      "label": "Carry",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "carry",
+      "community": 6,
+      "norm_label": "carry"
+    },
+    {
+      "label": "Any",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "any",
+      "community": 6,
+      "norm_label": "any"
+    },
+    {
+      "label": "Shared CartpoleBalance environment and visualization helpers.",
+      "file_type": "rationale",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "src_world_model_playground_cartpole_rationale_1",
+      "community": 11,
+      "norm_label": "shared cartpolebalance environment and visualization helpers."
+    },
+    {
+      "label": "Loads CartpoleBalance using the MJX-JAX implementation.",
+      "file_type": "rationale",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L31",
+      "_origin": "ast",
+      "id": "src_world_model_playground_cartpole_rationale_31",
+      "community": 8,
+      "norm_label": "loads cartpolebalance using the mjx-jax implementation."
+    },
+    {
+      "label": "Steps a rollout while showing one state in MuJoCo's live viewer.",
+      "file_type": "rationale",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L45",
+      "_origin": "ast",
+      "id": "src_world_model_playground_cartpole_rationale_45",
+      "community": 6,
+      "norm_label": "steps a rollout while showing one state in mujoco's live viewer."
+    },
+    {
+      "label": "README.md",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "readme",
+      "community": 3,
+      "norm_label": "readme.md"
+    },
+    {
+      "label": "World Model Playground",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "readme_world_model_playground",
+      "community": 3,
+      "norm_label": "world model playground"
+    },
+    {
+      "label": "Parallel MJX Random Agent",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "readme_parallel_mjx_random_agent",
+      "community": 3,
+      "norm_label": "parallel mjx random agent"
+    },
+    {
+      "label": "Brax PPO",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L30",
+      "_origin": "ast",
+      "id": "readme_brax_ppo",
+      "community": 3,
+      "norm_label": "brax ppo"
+    },
+    {
+      "label": "Docker",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L71",
+      "_origin": "ast",
+      "id": "readme_docker",
+      "community": 3,
+      "norm_label": "docker"
+    },
+    {
+      "label": "MLflow",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L73",
+      "_origin": "ast",
+      "id": "readme_mlflow",
+      "community": 3,
+      "norm_label": "mlflow"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".opencode/opencode.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "source": "opencode_opencode",
+      "target": "opencode_opencode_plugin",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".opencode/opencode.json",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "opencode_opencode",
+      "target": "opencode_opencode_schema",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "extends",
+      "confidence": "EXTRACTED",
+      "source_file": ".opencode/opencode.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "context": "import",
+      "source": "opencode_opencode_plugin",
+      "target": "ref_opencode_plugins_graphify_js",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".opencode/package.json",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "opencode_package",
+      "target": "opencode_package_dependencies",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".opencode/package.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "source": "opencode_package_dependencies",
+      "target": "opencode_package_dependencies_opencode_ai_plugin",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": ".opencode/package.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "context": "import",
+      "source": "opencode_package_dependencies_opencode_ai_plugin",
+      "target": "opencode_ai_plugin",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".opencode/plugins/graphify.js",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "opencode_plugins_graphify",
+      "target": "opencode_plugins_graphify_graphifyplugin",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": ".opencode/plugins/graphify.js",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "opencode_plugins_graphify_rationale_4",
+      "target": "opencode_plugins_graphify",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L40",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent",
+      "target": "scripts_cartpole_random_agent_main",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent",
+      "target": "scripts_cartpole_random_agent_parse_args",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L13",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent",
+      "target": "src_world_model_playground_cartpole",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent_rationale_1",
+      "target": "scripts_cartpole_random_agent",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L41",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent_main",
+      "target": "scripts_cartpole_random_agent_parse_args",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent_parse_args",
+      "target": "scripts_cartpole_random_agent_py_namespace",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "indirect_call",
+      "context": "argument",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent_parse_args",
+      "target": "src_world_model_playground_cartpole_non_negative_int"
+    },
+    {
+      "relation": "indirect_call",
+      "context": "argument",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L23",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent_parse_args",
+      "target": "src_world_model_playground_cartpole_positive_int"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L45",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent_main",
+      "target": "src_world_model_playground_cartpole_load_cartpole"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/cartpole/random_agent.py",
+      "source_location": "L79",
+      "weight": 1.0,
+      "source": "scripts_cartpole_random_agent_main",
+      "target": "src_world_model_playground_cartpole_run_live_rollout"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L101",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo",
+      "target": "scripts_cartpole_train_ppo_evaluate_policy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L80",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo",
+      "target": "scripts_cartpole_train_ppo_load_policy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L144",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo",
+      "target": "scripts_cartpole_train_ppo_main",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo",
+      "target": "scripts_cartpole_train_ppo_parse_args",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L121",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo",
+      "target": "scripts_cartpole_train_ppo_render_policy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L67",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo",
+      "target": "scripts_cartpole_train_ppo_resolve_checkpoint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L91",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo",
+      "target": "scripts_cartpole_train_ppo_scalar_metrics",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L22",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo",
+      "target": "src_world_model_playground_cartpole",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_rationale_1",
+      "target": "scripts_cartpole_train_ppo",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L145",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_main",
+      "target": "scripts_cartpole_train_ppo_parse_args",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L39",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_parse_args",
+      "target": "path",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_parse_args",
+      "target": "scripts_cartpole_train_ppo_py_namespace",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "indirect_call",
+      "context": "argument",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L32",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_parse_args",
+      "target": "src_world_model_playground_cartpole_positive_int"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L152",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_main",
+      "target": "scripts_cartpole_train_ppo_resolve_checkpoint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L68",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_rationale_68",
+      "target": "scripts_cartpole_train_ppo_resolve_checkpoint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L67",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_resolve_checkpoint",
+      "target": "path",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "parameter_type",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L80",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_load_policy",
+      "target": "path",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L158",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_main",
+      "target": "scripts_cartpole_train_ppo_load_policy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L81",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_rationale_81",
+      "target": "scripts_cartpole_train_ppo_load_policy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L92",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_rationale_92",
+      "target": "scripts_cartpole_train_ppo_scalar_metrics",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L250",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_main",
+      "target": "scripts_cartpole_train_ppo_evaluate_policy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L102",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_rationale_102",
+      "target": "scripts_cartpole_train_ppo_evaluate_policy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L279",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_main",
+      "target": "scripts_cartpole_train_ppo_render_policy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L122",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_rationale_122",
+      "target": "scripts_cartpole_train_ppo_render_policy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L134",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_render_policy",
+      "target": "src_world_model_playground_cartpole_run_live_rollout"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/cartpole/train_ppo.py",
+      "source_location": "L151",
+      "weight": 1.0,
+      "source": "scripts_cartpole_train_ppo_main",
+      "target": "src_world_model_playground_cartpole_load_cartpole"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/__init__.py",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "src_world_model_playground_init_rationale_1",
+      "target": "src_world_model_playground_init",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L30",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole",
+      "target": "src_world_model_playground_cartpole_load_cartpole",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L23",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole",
+      "target": "src_world_model_playground_cartpole_non_negative_int",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L16",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole",
+      "target": "src_world_model_playground_cartpole_positive_int",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L37",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole",
+      "target": "src_world_model_playground_cartpole_run_live_rollout",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole_rationale_1",
+      "target": "src_world_model_playground_cartpole",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L30",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole_load_cartpole",
+      "target": "mjxenv",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L31",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole_rationale_31",
+      "target": "src_world_model_playground_cartpole_load_cartpole",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "parameter_type",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L37",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole_run_live_rollout",
+      "target": "mjxenv",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L45",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole_rationale_45",
+      "target": "src_world_model_playground_cartpole_run_live_rollout",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "generic_arg",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L37",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole_run_live_rollout",
+      "target": "any",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "generic_arg",
+      "confidence": "EXTRACTED",
+      "source_file": "src/world_model_playground/cartpole.py",
+      "source_location": "L37",
+      "weight": 1.0,
+      "source": "src_world_model_playground_cartpole_run_live_rollout",
+      "target": "carry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "readme",
+      "target": "readme_world_model_playground",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L30",
+      "weight": 1.0,
+      "source": "readme_world_model_playground",
+      "target": "readme_brax_ppo",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L71",
+      "weight": 1.0,
+      "source": "readme_world_model_playground",
+      "target": "readme_docker",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L3",
+      "weight": 1.0,
+      "source": "readme_world_model_playground",
+      "target": "readme_parallel_mjx_random_agent",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L73",
+      "weight": 1.0,
+      "source": "readme_docker",
+      "target": "readme_mlflow",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": []
+}
