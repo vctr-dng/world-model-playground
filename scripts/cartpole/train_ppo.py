@@ -8,8 +8,10 @@ from pathlib import Path
 
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
+import imageio_ffmpeg
 import jax
 import jax.numpy as jnp
+import mediapy
 import mlflow
 import numpy as np
 from brax.training.agents.ppo import checkpoint
@@ -69,6 +71,13 @@ def parse_args() -> argparse.Namespace:
         help="show the deterministic policy after training or loading",
     )
     parser.add_argument("--render-steps", type=positive_int, default=1000)
+    parser.add_argument(
+        "--record-video",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="record a policy rollout at every training evaluation",
+    )
+    parser.add_argument("--video-steps", type=positive_int, default=1000)
     parser.add_argument("--solve-threshold", type=float, default=950.0)
     parser.add_argument("--batch-size", type=positive_int)
     parser.add_argument("--num-minibatches", type=positive_int)
@@ -134,6 +143,26 @@ def evaluate_policy(env, policy, seed: int, num_envs: int, num_steps: int) -> fl
     return float(jnp.mean(returns))
 
 
+def record_policy_video(env, policy, path: Path, seed: int, num_steps: int) -> None:
+    """Records one deterministic policy rollout to an MP4 file."""
+    reset = jax.jit(env.reset)
+    step = jax.jit(env.step)
+    state = jax.block_until_ready(reset(jax.random.key(seed)))
+    rng = jax.random.key(seed + 1)
+    trajectory = []
+
+    for _ in range(num_steps):
+        trajectory.append(state)
+        rng, action_rng = jax.random.split(rng)
+        action = policy(state.obs, action_rng)[0]
+        state = step(state, action)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frames = env.render(trajectory, camera="fixed")
+    mediapy.set_ffmpeg(imageio_ffmpeg.get_ffmpeg_exe())
+    mediapy.write_video(path, frames, fps=1 / env.dt)
+
+
 def render_policy(env, policy, seed: int, num_steps: int) -> None:
     """Displays a deterministic policy in the live MuJoCo viewer."""
     reset = jax.jit(env.reset)
@@ -196,6 +225,7 @@ def main() -> None:
             timestamp = datetime.datetime.now(tz=datetime.UTC).strftime("%Y%m%d-%H%M%S")
             run_dir = (args.output_dir / timestamp).resolve()
             checkpoints_dir = run_dir / "checkpoints"
+            videos_dir = run_dir / "videos"
             checkpoints_dir.mkdir(parents=True, exist_ok=True)
             print(f"Run directory: {run_dir}")
             print(f"Training parameters:\n{config}")
@@ -220,6 +250,8 @@ def main() -> None:
                     "seed": args.seed,
                     "num_eval_envs": args.num_eval_envs,
                     "full_circle_reset": True,
+                    "record_video": args.record_video,
+                    "video_steps": args.video_steps,
                     "max_devices": args.max_devices or "all",
                     "restore_checkpoint": str(checkpoint_path or ""),
                     "run_directory": str(run_dir),
@@ -230,6 +262,31 @@ def main() -> None:
             print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
 
             start = time.monotonic()
+            evaluation_policies = {}
+            pending_video_steps = set()
+
+            def write_evaluation_video(step: int, policy) -> None:
+                video_path = videos_dir / f"eval_{step:012d}.mp4"
+                record_policy_video(
+                    env,
+                    policy,
+                    video_path,
+                    seed=args.seed + step,
+                    num_steps=args.video_steps,
+                )
+                mlflow.log_artifact(str(video_path), artifact_path="videos")
+                print(f"Evaluation video: {video_path}")
+
+            def capture_policy(step: int, make_policy, params) -> None:
+                if not args.record_video:
+                    return
+                policy = jax.jit(make_policy(params, deterministic=True))
+                if step in pending_video_steps:
+                    pending_video_steps.remove(step)
+                    write_evaluation_video(step, policy)
+                else:
+                    evaluation_policies.clear()
+                    evaluation_policies[step] = policy
 
             def progress(step: int, metrics) -> None:
                 reward = metrics.get("eval/episode_reward")
@@ -237,6 +294,12 @@ def main() -> None:
                 logged_metrics = scalar_metrics(metrics)
                 logged_metrics["elapsed_seconds"] = elapsed
                 mlflow.log_metrics(logged_metrics, step=step)
+                if reward is not None and args.record_video:
+                    policy = evaluation_policies.pop(step, None)
+                    if policy is None:
+                        pending_video_steps.add(step)
+                    else:
+                        write_evaluation_video(step, policy)
                 if reward is None:
                     print(f"step={step:,} elapsed={elapsed:.1f}s")
                 else:
@@ -258,6 +321,7 @@ def main() -> None:
                 restore_checkpoint_path=(
                     str(checkpoint_path) if checkpoint_path else None
                 ),
+                policy_params_fn=capture_policy,
                 progress_fn=progress,
             )
             policy = jax.jit(make_policy(params, deterministic=True))
