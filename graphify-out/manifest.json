@@ -10,8 +10,8 @@
     "semantic_hash": "3ea725724bc8ebe483c9f13d6aa1124f"
   },
   "pyproject.toml": {
-    "mtime": 1789184425.5950027,
-    "ast_hash": "f268de9b1752859a1b93e10f3325c548",
+    "mtime": 1789187530.197843,
+    "ast_hash": "04074b40400cf9f7a631ac0d3f6fee91",
     "semantic_hash": ""
   },
   "README.md": {
@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "scripts/cartpole/train_ppo.py": {
-    "mtime": 1789185704.208023,
-    "ast_hash": "3bb842fc339a7c3259b43d7302690449",
+    "mtime": 1789188414.1644084,
+    "ast_hash": "54047c8c18c0a8710aaaf1a6bd3b3f45",
     "semantic_hash": ""
   },
   "src/world_model_playground/__init__.py": {
@@ -50,8 +50,8 @@
     "semantic_hash": ""
   },
   "src/world_model_playground/cartpole.py": {
-    "mtime": 1789186306.5778174,
-    "ast_hash": "18bc581ae7d21e3e16549385757c4d9d",
+    "mtime": 1789188414.1474078,
+    "ast_hash": "164b74c620063e7c4a81539b20ca548b",
     "semantic_hash": ""
   },
   ".pre-commit-config.yaml": {
@@ -67,6 +67,181 @@
   "docker/mlflow-data/artifacts/1/9470ae1d6e514cdbac7868be956d3241/artifacts/checkpoint/commit_success.txt": {
     "mtime": 1789185823.6090395,
     "ast_hash": "dbf8758a1475637390559071a3da4b65",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/087be9fc64ad4a14a23cadd3c513f742/artifacts/config/ppo.json": {
+    "mtime": 1789187665.97607,
+    "ast_hash": "e331a46ae371e7bee74584e7b75627aa",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/checkpoint/ppo_network_config.json": {
+    "mtime": 1789188952.350749,
+    "ast_hash": "6385424ba5f9c4397b308777637bb085",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/config/ppo.json": {
+    "mtime": 1789188517.0956225,
+    "ast_hash": "e331a46ae371e7bee74584e7b75627aa",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/9b8c31dee6524abaad45ab79c336dd4d/artifacts/checkpoint/ppo_network_config.json": {
+    "mtime": 1789187883.4498472,
+    "ast_hash": "6385424ba5f9c4397b308777637bb085",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/9b8c31dee6524abaad45ab79c336dd4d/artifacts/config/ppo.json": {
+    "mtime": 1789187808.7015169,
+    "ast_hash": "de91a307d04ab29c24d1196cb1790dd6",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/checkpoint/ppo_network_config.json": {
+    "mtime": 1789188496.872991,
+    "ast_hash": "6385424ba5f9c4397b308777637bb085",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/config/ppo.json": {
+    "mtime": 1789188060.5943725,
+    "ast_hash": "e331a46ae371e7bee74584e7b75627aa",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/f9a950aa2afd426b882a10176930a2a5/artifacts/checkpoint/ppo_network_config.json": {
+    "mtime": 1789186708.697445,
+    "ast_hash": "f3f44b2a9217fbb69f187af5a6ac9a14",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/f9a950aa2afd426b882a10176930a2a5/artifacts/config/ppo.json": {
+    "mtime": 1789186435.560952,
+    "ast_hash": "b5d806ce8d280bda05dc8d770c1131c0",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/checkpoint/commit_success.txt": {
+    "mtime": 1789188952.346749,
+    "ast_hash": "bc548dacb4996b753ca62673b1bbb126",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/9b8c31dee6524abaad45ab79c336dd4d/artifacts/checkpoint/commit_success.txt": {
+    "mtime": 1789187883.4568474,
+    "ast_hash": "0f93519a0686f2b9b96d8e834357ed7b",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/checkpoint/commit_success.txt": {
+    "mtime": 1789188496.8699908,
+    "ast_hash": "3fbcd501afa95b0b6900affe7f44ba99",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/f9a950aa2afd426b882a10176930a2a5/artifacts/checkpoint/commit_success.txt": {
+    "mtime": 1789186708.6934447,
+    "ast_hash": "45b6f7d6e933f13eb1bd7ed53fa9b43e",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000000000000.mp4": {
+    "mtime": 1789188554.3167849,
+    "ast_hash": "b5fdd3ff53f9eb1fe5dd172c41f63382",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000009830400.mp4": {
+    "mtime": 1789188619.9216685,
+    "ast_hash": "bff643ce928f641fd538a37446728def",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000019660800.mp4": {
+    "mtime": 1789188656.9875014,
+    "ast_hash": "6f81bfaeb9bc2dbab72ca3be5a82afa4",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000029491200.mp4": {
+    "mtime": 1789188693.7983482,
+    "ast_hash": "e0cb81c86e789f9b4bba2314df248741",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000039321600.mp4": {
+    "mtime": 1789188731.260229,
+    "ast_hash": "a51e0acd1a829bcaa5a0f25c653a1c87",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000049152000.mp4": {
+    "mtime": 1789188768.1491137,
+    "ast_hash": "6083a662d57a4a1d37ea3b93d1719153",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000058982400.mp4": {
+    "mtime": 1789188805.5770276,
+    "ast_hash": "1434de53b91e4fa6e57db566171179a1",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000068812800.mp4": {
+    "mtime": 1789188843.1519604,
+    "ast_hash": "cb3b6c54b75ad7867a38f16aaaf77b1f",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000078643200.mp4": {
+    "mtime": 1789188880.545903,
+    "ast_hash": "eedeb150a0f3541fcaf3679d26e952e6",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/25f946de7cdf45d6baca20e1f25d41af/artifacts/videos/eval_000088473600.mp4": {
+    "mtime": 1789188918.2298663,
+    "ast_hash": "eb8c18f11ae887a3060d2cbd1825220c",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/9b8c31dee6524abaad45ab79c336dd4d/artifacts/videos/eval_000000000000.mp4": {
+    "mtime": 1789187832.5572605,
+    "ast_hash": "8a08474f2d220384424418c0e2a61e4a",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/9b8c31dee6524abaad45ab79c336dd4d/artifacts/videos/eval_000000000032.mp4": {
+    "mtime": 1789187852.43088,
+    "ast_hash": "6b568b6ff695db3f1dc1d466c381b8da",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000000000000.mp4": {
+    "mtime": 1789188097.9305375,
+    "ast_hash": "8c374dda6d6928b1f5b9c359aa2ec961",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000009830400.mp4": {
+    "mtime": 1789188163.9475975,
+    "ast_hash": "bbceaa0b4f755bfd453693417817c5e3",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000019660800.mp4": {
+    "mtime": 1789188200.970753,
+    "ast_hash": "133695f97726f44bd9af52184c9866ac",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000029491200.mp4": {
+    "mtime": 1789188237.9039059,
+    "ast_hash": "0969fe543e8acf94ffe6c7669d52d717",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000039321600.mp4": {
+    "mtime": 1789188275.0880663,
+    "ast_hash": "4739f913894321432e8d1c887062231f",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000049152000.mp4": {
+    "mtime": 1789188312.0892215,
+    "ast_hash": "5b87df63a97b4c3daf1a1ac89de59720",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000058982400.mp4": {
+    "mtime": 1789188349.52039,
+    "ast_hash": "7bd9c8355a20b34e7518db0f71c90080",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000068812800.mp4": {
+    "mtime": 1789188387.3215704,
+    "ast_hash": "6ad1e0ddb8bf3f52578d554886660667",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000078643200.mp4": {
+    "mtime": 1789188424.5417323,
+    "ast_hash": "ab7f5cc7919c92457edfcdb838509cf4",
+    "semantic_hash": ""
+  },
+  "docker/mlflow-data/artifacts/1/d1729793934a449ea41d9a09d8e53a40/artifacts/videos/eval_000088473600.mp4": {
+    "mtime": 1789188462.125906,
+    "ast_hash": "b11a33e240087a42e8f85b67680bc578",
     "semantic_hash": ""
   }
 }
