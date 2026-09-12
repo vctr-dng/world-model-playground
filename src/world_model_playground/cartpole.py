@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 import jax
+import jax.numpy as jnp
 import mujoco
 import mujoco.viewer
 import numpy as np
@@ -27,11 +28,29 @@ def non_negative_int(value: str) -> int:
     return parsed
 
 
-def load_cartpole() -> MjxEnv:
-    """Loads CartpoleBalance using the MJX-JAX implementation."""
+def load_cartpole(*, full_circle_reset: bool = False) -> MjxEnv:
+    """Loads CartpoleBalance, optionally resetting across the full pole circle."""
     config = registry.get_default_config("CartpoleBalance")
     config.impl = "jax"
-    return registry.load("CartpoleBalance", config=config)
+    env = registry.load("CartpoleBalance", config=config)
+
+    if full_circle_reset:
+        slider_qposadr = env.mj_model.joint("slider").qposadr[0]
+        hinge_qposadr = env.mj_model.joint("hinge_1").qposadr[0]
+
+        def reset_full_circle(rng: jax.Array) -> jax.Array:
+            cart_rng, pole_rng = jax.random.split(rng)
+            qpos = jnp.zeros(env.mjx_model.nq)
+            qpos = qpos.at[slider_qposadr].set(
+                jax.random.uniform(cart_rng, (), minval=-0.1, maxval=0.1)
+            )
+            return qpos.at[hinge_qposadr].set(
+                jax.random.uniform(pole_rng, (), minval=-jnp.pi, maxval=jnp.pi)
+            )
+
+        env._reset_randomize = reset_full_circle  # pyright: ignore[reportPrivateUsage]
+
+    return env
 
 
 def run_live_rollout[Carry](

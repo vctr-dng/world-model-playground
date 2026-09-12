@@ -164,7 +164,7 @@ def main() -> None:
     if args.num_resets_per_eval is not None and args.num_resets_per_eval < 0:
         raise ValueError("--num-resets-per-eval must be at least 0")
 
-    env = load_cartpole()
+    env = load_cartpole(full_circle_reset=True)
     checkpoint_path = resolve_checkpoint(args.checkpoint) if args.checkpoint else None
 
     mlflow_active = False
@@ -219,6 +219,7 @@ def main() -> None:
                 {
                     "seed": args.seed,
                     "num_eval_envs": args.num_eval_envs,
+                    "full_circle_reset": True,
                     "max_devices": args.max_devices or "all",
                     "restore_checkpoint": str(checkpoint_path or ""),
                     "run_directory": str(run_dir),
