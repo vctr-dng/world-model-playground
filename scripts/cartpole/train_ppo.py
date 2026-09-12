@@ -12,7 +12,6 @@ import jax
 import jax.numpy as jnp
 import mlflow
 import numpy as np
-from brax.training.acme import running_statistics
 from brax.training.agents.ppo import checkpoint
 from brax.training.agents.ppo import networks as ppo_networks
 from brax.training.agents.ppo import train as ppo
@@ -24,6 +23,27 @@ from world_model_playground.cartpole import (
     positive_int,
     run_live_rollout,
 )
+
+_OBSERVATION_SCALE = (1.8, 1.0, 1.0, 5.0, 5.0)
+
+
+def scale_observations(observations, processor_params):
+    """Applies fixed per-feature scaling to Cartpole observations."""
+    del processor_params
+    scale = jnp.asarray(_OBSERVATION_SCALE, dtype=observations.dtype)
+    return observations / scale
+
+
+def make_fixed_scale_ppo_networks(
+    observation_size, action_size, preprocess_observations_fn=None
+):
+    """Creates PPO networks that always use fixed observation scaling."""
+    del preprocess_observations_fn
+    return ppo_networks.make_ppo_networks(
+        observation_size,
+        action_size,
+        preprocess_observations_fn=scale_observations,
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,11 +99,7 @@ def resolve_checkpoint(path: Path) -> Path:
 
 def load_policy(env, checkpoint_path: Path):
     """Recreates the fixed PPO network and restores its parameters."""
-    network = ppo_networks.make_ppo_networks(
-        env.observation_size,
-        env.action_size,
-        preprocess_observations_fn=running_statistics.normalize,
-    )
+    network = make_fixed_scale_ppo_networks(env.observation_size, env.action_size)
     make_policy = ppo_networks.make_inference_fn(network)
     return make_policy(checkpoint.load(checkpoint_path), deterministic=True)
 
@@ -158,6 +174,7 @@ def main() -> None:
             policy = jax.jit(load_policy(env, checkpoint_path))
         else:
             config = dm_control_suite_params.brax_ppo_config("CartpoleBalance")
+            config.normalize_observations = False
             config.num_envs = args.num_envs
             config.num_timesteps = args.num_timesteps
             config.num_evals = args.num_evals
@@ -231,6 +248,7 @@ def main() -> None:
             make_policy, params, final_metrics = ppo.train(
                 environment=env,
                 **training_params,
+                network_factory=make_fixed_scale_ppo_networks,
                 wrap_env_fn=wrapper.wrap_for_brax_training,
                 seed=args.seed,
                 num_eval_envs=args.num_eval_envs,
