@@ -50,13 +50,14 @@ uv run python scripts/cartpole/train_ppo.py \
   --unroll-length 4 --num-resets-per-eval 0 --max-devices 1
 ```
 
-Load the latest checkpoint in a checkpoint directory for evaluation and live
-playback:
+Checkpoints and evaluation videos are stored in MLflow.
+Every evaluation's checkpoint is logged under `checkpoints/<step>` and the final one is also logged as `checkpoint`.
+Load a checkpoint for evaluation and live playback (a local checkpoint directory also works):
 
 ```bash
 uv run python scripts/cartpole/train_ppo.py \
   --play-only \
-  --checkpoint runs/cartpole_ppo/<run>/checkpoints \
+  --checkpoint runs:/<run_id>/checkpoint \
   --render
 ```
 
