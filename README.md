@@ -1,35 +1,27 @@
 # World Model Playground
 
-## Parallel MJX Random Agent
+## Cartpole Balance
 
-Run a random agent in 1,024 parallel `CartpoleBalance` environments:
+### Parallel MJX Random Agent
 
-```bash
-uv run python scripts/cartpole/random_agent.py
-```
-
-Configure the batch size, rollout length, and seed:
+Run a random agent in parallel `CartpoleBalance` environments:
 
 ```bash
 uv run python scripts/cartpole/random_agent.py --num-envs 2048 --num-steps 500 --seed 42
 ```
 
-Display environment 0 from the parallel batch in a live MuJoCo viewer:
-
-```bash
-uv run python scripts/cartpole/random_agent.py --render
-```
-
-Select another environment with `--render-env`, which must be smaller than
-`--num-envs`:
+Display a specific environment from the parallel batch in a live MuJoCo viewer:
 
 ```bash
 uv run python scripts/cartpole/random_agent.py --render --render-env 12
 ```
 
-## Brax PPO
+Select another environment with `--render-env`, which must be smaller than
+`--num-envs`.
 
-Train a PPO policy using 1,024 parallel MJX environments and Playground's tuned
+### Brax PPO
+
+Train a PPO policy using parallel MJX environments and Playground's tuned
 `CartpoleBalance` hyperparameters. The default training budget is 60 million
 environment steps. Training metrics, parameters, configuration, and the final
 checkpoint are logged to MLflow. The tracking URI defaults to
@@ -72,8 +64,8 @@ uv run python scripts/cartpole/train_ppo.py \
 
 ### MLflow
 
+Start the MLflow server :
+
 ```bash
-cd docker
-mkdir mlflow-data -p
-HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d
+./docker/up.sh
 ```
