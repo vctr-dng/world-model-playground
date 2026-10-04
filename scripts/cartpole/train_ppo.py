@@ -3,7 +3,10 @@
 import argparse
 import datetime
 import os
+import shutil
+import tempfile
 import time
+import urllib.parse
 from pathlib import Path
 
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
@@ -58,8 +61,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-evals", type=positive_int, default=defaults.num_evals)
     parser.add_argument("--num-eval-envs", type=positive_int, default=128)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--output-dir", type=Path, default=Path("runs/cartpole_ppo"))
-    parser.add_argument("--checkpoint", type=Path)
+    parser.add_argument(
+        "--checkpoint",
+        help="local checkpoint directory or MLflow artifact URI "
+        "(e.g. runs:/<run_id>/checkpoint)",
+    )
     parser.add_argument(
         "--play-only",
         action="store_true",
@@ -104,6 +110,15 @@ def resolve_checkpoint(path: Path) -> Path:
     if not candidates:
         raise ValueError(f"No Brax PPO checkpoints found under {path}")
     return max(candidates, key=lambda child: int(child.name))
+
+
+def fetch_checkpoint(checkpoint: str, download_dir: Path) -> Path:
+    """Returns a local checkpoint directory, downloading MLflow artifact URIs."""
+    if urllib.parse.urlparse(checkpoint).scheme:
+        checkpoint = mlflow.artifacts.download_artifacts(
+            artifact_uri=checkpoint, dst_path=str(download_dir)
+        )
+    return resolve_checkpoint(Path(checkpoint))
 
 
 def load_policy(env, checkpoint_path: Path):
@@ -194,10 +209,18 @@ def main() -> None:
         raise ValueError("--num-resets-per-eval must be at least 0")
 
     env = load_cartpole(full_circle_reset=True)
-    checkpoint_path = resolve_checkpoint(args.checkpoint) if args.checkpoint else None
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+    mlflow.set_tracking_uri(tracking_uri)
 
+    # Files only live here until they are uploaded to MLflow.
+    scratch_dir = Path(tempfile.mkdtemp(prefix="cartpole_ppo_"))
     mlflow_active = False
     try:
+        checkpoint_path = (
+            fetch_checkpoint(args.checkpoint, scratch_dir / "restore")
+            if args.checkpoint
+            else None
+        )
         if args.play_only:
             print(f"Loading checkpoint: {checkpoint_path}")
             policy = jax.jit(load_policy(env, checkpoint_path))
@@ -223,17 +246,11 @@ def main() -> None:
                 )
 
             timestamp = datetime.datetime.now(tz=datetime.UTC).strftime("%Y%m%d-%H%M%S")
-            run_dir = (args.output_dir / timestamp).resolve()
-            checkpoints_dir = run_dir / "checkpoints"
-            videos_dir = run_dir / "videos"
-            checkpoints_dir.mkdir(parents=True, exist_ok=True)
-            print(f"Run directory: {run_dir}")
+            checkpoints_dir = scratch_dir / "checkpoints"
+            videos_dir = scratch_dir / "videos"
+            checkpoints_dir.mkdir()
             print(f"Training parameters:\n{config}")
 
-            tracking_uri = os.environ.get(
-                "MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"
-            )
-            mlflow.set_tracking_uri(tracking_uri)
             mlflow.set_experiment(args.mlflow_experiment)
             mlflow.start_run(
                 run_name=args.mlflow_run_name or timestamp,
@@ -253,8 +270,7 @@ def main() -> None:
                     "record_video": args.record_video,
                     "video_steps": args.video_steps,
                     "max_devices": args.max_devices or "all",
-                    "restore_checkpoint": str(checkpoint_path or ""),
-                    "run_directory": str(run_dir),
+                    "restore_checkpoint": args.checkpoint or "",
                 }
             )
             mlflow.log_dict(config.to_dict(), "config/ppo.json")
@@ -275,7 +291,22 @@ def main() -> None:
                     num_steps=args.video_steps,
                 )
                 mlflow.log_artifact(str(video_path), artifact_path="videos")
-                print(f"Evaluation video: {video_path}")
+                video_path.unlink()
+                print(f"Evaluation video: videos/{video_path.name}")
+
+            def upload_checkpoint(step: int) -> None:
+                # Brax saves the step's checkpoint just before calling progress_fn.
+                step_dir = checkpoints_dir / f"{step:012d}"
+                if not step_dir.exists():
+                    return
+                mlflow.log_artifacts(
+                    str(step_dir), artifact_path=f"checkpoints/{step_dir.name}"
+                )
+                # Keep only the latest locally; it is re-logged as the final one.
+                for old_dir in checkpoints_dir.iterdir():
+                    if old_dir != step_dir:
+                        shutil.rmtree(old_dir)
+                print(f"Checkpoint: checkpoints/{step_dir.name}")
 
             def capture_policy(step: int, make_policy, params) -> None:
                 if not args.record_video:
@@ -294,6 +325,7 @@ def main() -> None:
                 logged_metrics = scalar_metrics(metrics)
                 logged_metrics["elapsed_seconds"] = elapsed
                 mlflow.log_metrics(logged_metrics, step=step)
+                upload_checkpoint(step)
                 if reward is not None and args.record_video:
                     policy = evaluation_policies.pop(step, None)
                     if policy is None:
@@ -328,7 +360,6 @@ def main() -> None:
             final_reward = final_metrics.get("eval/episode_reward")
             if final_reward is not None:
                 print(f"Final Brax evaluation reward: {float(final_reward):.3f}")
-            print(f"Checkpoints: {checkpoints_dir}")
 
         mean_return = evaluate_policy(
             env,
@@ -350,6 +381,7 @@ def main() -> None:
             )
             latest_checkpoint = resolve_checkpoint(checkpoints_dir)
             mlflow.log_artifacts(str(latest_checkpoint), artifact_path="checkpoint")
+            print(f"Checkpoint: runs:/{mlflow.active_run().info.run_id}/checkpoint")
     except BaseException:
         if mlflow_active:
             mlflow.end_run(status="FAILED")
@@ -357,6 +389,8 @@ def main() -> None:
     else:
         if mlflow_active:
             mlflow.end_run(status="FINISHED")
+    finally:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
 
     if args.render:
         render_policy(env, policy, args.seed + 200, args.render_steps)
