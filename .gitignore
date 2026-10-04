@@ -13,6 +13,5 @@ wheels/
 graphify-out/cost.json
 graphify-out/cache/
 
-# Training outputs
-runs/
-mlruns/
+# Collected datasets
+data/

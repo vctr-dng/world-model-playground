@@ -1,8 +1,9 @@
 services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:${MLFLOW_VERSION}
+    restart: unless-stopped
     container_name: mlflow-server
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    user: "${HOST_UID:?Set HOST_UID to the output of id -u}:${HOST_GID:?Set HOST_GID to the output of id -g}"
     environment:
       MLFLOW_PORT: ${MLFLOW_PORT}
     command:
@@ -17,6 +18,8 @@ services:
       - 0.0.0.0
       - --port
       - ${MLFLOW_PORT}
+      - --cors-allowed-origins
+      - "http://${MLFLOW_BIND_ADDRESS}:${MLFLOW_PORT},http://127.0.0.1:${MLFLOW_PORT},http://localhost:${MLFLOW_PORT}"
     volumes:
       - ./mlflow-data:/mlflow-data
     ports:
