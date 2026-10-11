@@ -6,7 +6,6 @@ import os
 import shutil
 import tempfile
 import time
-import urllib.parse
 from pathlib import Path
 
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
@@ -17,8 +16,6 @@ import jax.numpy as jnp
 import mediapy
 import mlflow
 import numpy as np
-from brax.training.agents.ppo import checkpoint
-from brax.training.agents.ppo import networks as ppo_networks
 from brax.training.agents.ppo import train as ppo
 from mujoco_playground import wrapper
 from mujoco_playground.config import dm_control_suite_params
@@ -28,27 +25,12 @@ from world_model_playground.cartpole import (
     positive_int,
     run_live_rollout,
 )
-
-_OBSERVATION_SCALE = (1.8, 1.0, 1.0, 5.0, 5.0)
-
-
-def scale_observations(observations, processor_params):
-    """Applies fixed per-feature scaling to Cartpole observations."""
-    del processor_params
-    scale = jnp.asarray(_OBSERVATION_SCALE, dtype=observations.dtype)
-    return observations / scale
-
-
-def make_fixed_scale_ppo_networks(
-    observation_size, action_size, preprocess_observations_fn=None
-):
-    """Creates PPO networks that always use fixed observation scaling."""
-    del preprocess_observations_fn
-    return ppo_networks.make_ppo_networks(
-        observation_size,
-        action_size,
-        preprocess_observations_fn=scale_observations,
-    )
+from world_model_playground.policy import (
+    fetch_checkpoint,
+    load_policy,
+    make_fixed_scale_ppo_networks,
+    resolve_checkpoint,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -97,35 +79,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--mlflow-run-name")
     return parser.parse_args()
-
-
-def resolve_checkpoint(path: Path) -> Path:
-    """Returns a checkpoint directory, resolving a root to its latest step."""
-    path = path.resolve()
-    if (path / "ppo_network_config.json").exists():
-        return path
-    candidates = [
-        child for child in path.iterdir() if child.is_dir() and child.name.isdigit()
-    ]
-    if not candidates:
-        raise ValueError(f"No Brax PPO checkpoints found under {path}")
-    return max(candidates, key=lambda child: int(child.name))
-
-
-def fetch_checkpoint(checkpoint: str, download_dir: Path) -> Path:
-    """Returns a local checkpoint directory, downloading MLflow artifact URIs."""
-    if urllib.parse.urlparse(checkpoint).scheme:
-        checkpoint = mlflow.artifacts.download_artifacts(
-            artifact_uri=checkpoint, dst_path=str(download_dir)
-        )
-    return resolve_checkpoint(Path(checkpoint))
-
-
-def load_policy(env, checkpoint_path: Path):
-    """Recreates the fixed PPO network and restores its parameters."""
-    network = make_fixed_scale_ppo_networks(env.observation_size, env.action_size)
-    make_policy = ppo_networks.make_inference_fn(network)
-    return make_policy(checkpoint.load(checkpoint_path), deterministic=True)
 
 
 def scalar_metrics(metrics) -> dict[str, float]:
@@ -223,7 +176,7 @@ def main() -> None:
         )
         if args.play_only:
             print(f"Loading checkpoint: {checkpoint_path}")
-            policy = jax.jit(load_policy(env, checkpoint_path))
+            policy = jax.jit(load_policy(env, checkpoint_path, deterministic=True))
         else:
             config = dm_control_suite_params.brax_ppo_config("CartpoleBalance")
             config.normalize_observations = False
