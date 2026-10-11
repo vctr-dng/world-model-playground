@@ -18,10 +18,26 @@ def _():
     import mujoco
     import numpy as np
 
-    from world_model_playground.cartpole import load_cartpole
+    from world_model_playground.cartpole import (
+        load_cartpole,
+        matched_fovy,
+        render_frames,
+    )
+    from world_model_playground.wm import episodes
 
     mediapy.set_ffmpeg(imageio_ffmpeg.get_ffmpeg_exe())
-    return json, load_cartpole, mediapy, mo, mujoco, np, plt
+    return (
+        episodes,
+        json,
+        load_cartpole,
+        matched_fovy,
+        mediapy,
+        mo,
+        mujoco,
+        np,
+        plt,
+        render_frames,
+    )
 
 
 @app.cell
@@ -31,7 +47,8 @@ def title(mo):
 
     Visualize collected transitions $(o_t, a_t) \to o_{t+1}$ from
     `data/cartpole_trajectories`, both as MuJoCo renders and as observation
-    vectors `[cart_pos, cos θ, sin θ, cart_vel, ang_vel]`.
+    vectors `[cart_pos, cos θ, sin θ, cart_vel, ang_vel]`. Episodic collections
+    are read lazily from their episode shards at the selected resolution.
     """)
 
 
@@ -80,13 +97,34 @@ def load_transitions(collection_dir, np):
 
 
 @app.cell
-def load_images(collection_dir, mo, np):
-    with (
-        mo.status.spinner(title="Decompressing images (~4.6 GB)..."),
-        np.load(collection_dir / "image_transitions.npz") as _npz,
-    ):
-        images = _npz["images"]
-        next_images = _npz["next_images"]
+def frames_picker(collection, episodes, mo):
+    _keys = (
+        [_entry["key"] for _entry in collection["resolutions"]]
+        if episodes.is_episodic(collection)
+        else []
+    )
+    frames_picker = mo.ui.dropdown(
+        options=_keys, value=_keys[-1] if _keys else None, label="Frames"
+    )
+    frames_picker if _keys else None
+    return (frames_picker,)
+
+
+@app.cell
+def load_images(collection, collection_dir, episodes, frames_picker, mo, np):
+    if episodes.is_episodic(collection):
+        mo.stop(frames_picker.value is None, mo.md("Select a frame resolution."))
+        images = episodes.TransitionFrames(collection_dir, frames_picker.value)
+        next_images = episodes.TransitionFrames(
+            collection_dir, frames_picker.value, following=True
+        )
+    else:
+        with (
+            mo.status.spinner(title="Decompressing images (~4.6 GB)..."),
+            np.load(collection_dir / "image_transitions.npz") as _npz,
+        ):
+            images = _npz["images"]
+            next_images = _npz["next_images"]
     return images, next_images
 
 
@@ -150,7 +188,7 @@ def overview(
 
 
 @app.cell(hide_code=True)
-def camera_model(collection, load_cartpole, mujoco, np):
+def camera_model(collection, load_cartpole, matched_fovy, mujoco, np):
     _env = load_cartpole(full_circle_reset=collection["full_circle_reset"])
     cartpole_model = _env.mj_model
     CONTROL_DT = float(_env.dt)
@@ -185,7 +223,9 @@ def camera_model(collection, load_cartpole, mujoco, np):
         """Pinhole projection of world points into image pixel coordinates (u, v)."""
         cam = (np.asarray(points) - CAMERA_POS) @ CAMERA_ROT
         depth = -cam[..., 2]  # MuJoCo cameras look along -z
-        focal = 0.5 * height / np.tan(np.deg2rad(CAMERA_FOVY) / 2)
+        # Every resolution keeps the horizontal view of a 320x240 frame.
+        fovy = matched_fovy(CAMERA_FOVY, height, width)
+        focal = 0.5 * height / np.tan(np.deg2rad(fovy) / 2)
         u = 0.5 * width + focal * cam[..., 0] / depth - 0.5
         v = 0.5 * height - focal * cam[..., 1] / depth - 0.5
         return np.stack([u, v], axis=-1)
@@ -457,13 +497,19 @@ def check_chaining(episode_ids, images, mo, next_images, np, transitions):
     _step_gap = (
         transitions["timesteps"][chain_next] - transitions["timesteps"][chain_current]
     )
+    # A random subset keeps lazily loaded episodic collections fast to check.
+    _sample = np.sort(
+        np.random.default_rng(0).choice(
+            len(chain_current), size=min(512, len(chain_current)), replace=False
+        )
+    )
     _image_match = np.fromiter(
         (
             np.array_equal(next_images[_i], images[_j])
-            for _i, _j in zip(chain_current, chain_next)
+            for _i, _j in zip(chain_current[_sample], chain_next[_sample])
         ),
         dtype=bool,
-        count=len(chain_current),
+        count=len(_sample),
     )
     _ok = lambda _flag: "✅" if _flag else "❌"
     mo.md(f"""
@@ -472,7 +518,7 @@ def check_chaining(episode_ids, images, mo, next_images, np, transitions):
     | consecutive pairs within episodes | {len(chain_current)} | |
     | timestep increments by 1 | {int((_step_gap == 1).sum())} / {len(_step_gap)} | {_ok((_step_gap == 1).all())} |
     | `next_observations[t] == observations[t+1]` (max abs gap) | {_obs_gap.max():.2e} | {_ok(_obs_gap.max() < 1e-6)} |
-    | `next_images[t] == images[t+1]` | {int(_image_match.sum())} / {len(_image_match)} | {_ok(_image_match.all())} |
+    | `next_images[t] == images[t+1]` (random pairs) | {int(_image_match.sum())} / {len(_image_match)} | {_ok(_image_match.all())} |
     | `done` transitions | {int(transitions["dones"].sum())} | {"⚠️ single never-ending episode" if len(episode_ids) == 1 else ""} |
     """)
 
@@ -506,9 +552,9 @@ def check_rerender(
     cartpole_model,
     collection,
     images,
-    mujoco,
     next_images,
     np,
+    render_frames,
     transitions,
 ):
     def render_from_obs(rows, lag_correction=False):
@@ -517,23 +563,23 @@ def check_rerender(
         MJX computes `xmat` (hence cos θ, sin θ) before integrating qpos, so the observed angle lags
         one physics step behind; `lag_correction` advances it by ang_vel * timestep.
         """
-        _data = mujoco.MjData(cartpole_model)
+        _o = transitions["observations"][rows]
+        _theta = np.arctan2(_o[:, 2], _o[:, 1]) + (
+            _o[:, 4] * cartpole_model.opt.timestep if lag_correction else 0.0
+        )
         _height, _width = images.shape[1:3]
-        with mujoco.Renderer(cartpole_model, height=_height, width=_width) as _renderer:
-            _frames = []
-            for _row in rows:
-                _o = transitions["observations"][_row]
-                _theta = np.arctan2(_o[2], _o[1]) + (
-                    _o[4] * cartpole_model.opt.timestep if lag_correction else 0.0
-                )
-                _data.qpos[:] = (_o[0], _theta)
-                mujoco.mj_forward(cartpole_model, _data)
-                _renderer.update_scene(_data, camera=collection["camera"])
-                _frames.append(_renderer.render())
-        return np.stack(_frames)
+        return render_frames(
+            cartpole_model,
+            np.column_stack((_o[:, 0], _theta)),
+            height=_height,
+            width=_width,
+            camera=collection["camera"],
+        )
 
     rerender_rows = np.sort(
-        np.random.default_rng(0).choice(len(images), size=512, replace=False)
+        np.random.default_rng(0).choice(
+            len(images), size=min(512, len(images)), replace=False
+        )
     )
     rerender_frames = render_from_obs(rerender_rows)
     rerender_residual = np.abs(

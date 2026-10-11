@@ -1,4 +1,10 @@
-"""Collect Cartpole transitions and aligned rendered images for world-model training."""
+"""Collect Cartpole episodes with rendered frames for world-model training.
+
+Episodes are rolled out in parallel MJX environments and written as episode
+shards (see ``world_model_playground.wm.episodes``), each with its physics
+state and frames at every requested resolution, plus a flat
+``transitions.npz`` for the state-only models.
+"""
 
 import argparse
 import json
@@ -8,19 +14,38 @@ import uuid
 from pathlib import Path
 
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+# Headless EGL renders far faster than GLFW; set MUJOCO_GL to override.
+os.environ.setdefault("MUJOCO_GL", "egl")
 
 import jax
+import jax.numpy as jnp
 import mlflow
 import numpy as np
 
-from world_model_playground.cartpole import load_cartpole, positive_int
+from world_model_playground.cartpole import (
+    FrameRenderer,
+    load_cartpole,
+    parse_resolution,
+    positive_int,
+)
 from world_model_playground.policy import (
     load_policy,
     select_best_checkpoint,
     select_run_checkpoint,
 )
+from world_model_playground.wm.data import OBSERVATION_NAMES
+from world_model_playground.wm.episodes import (
+    FORMAT_VERSION,
+    MANIFEST_NAME,
+    episode_path,
+    episodes_to_transitions,
+    frames_key,
+    split_batched_episodes,
+    write_episode,
+)
 
 _ACTION_SOURCES = ("deterministic", "stochastic", "random")
+_MAX_EPISODE_LENGTH = 1000  # CartpoleBalance's own time limit
 
 
 def fraction(value: str) -> float:
@@ -32,10 +57,10 @@ def fraction(value: str) -> float:
 
 
 def episode_length(value: str) -> int:
-    """Parses an episode horizon capped at 200 transitions."""
+    """Parses an episode horizon capped at the environment's time limit."""
     parsed = positive_int(value)
-    if parsed > 200:
-        raise argparse.ArgumentTypeError("must be at most 200")
+    if parsed > _MAX_EPISODE_LENGTH:
+        raise argparse.ArgumentTypeError(f"must be at most {_MAX_EPISODE_LENGTH}")
     return parsed
 
 
@@ -51,31 +76,46 @@ def parse_args() -> argparse.Namespace:
         "--mlflow-run-id",
         help="specific MLflow run whose checkpoint should be used",
     )
-    parser.add_argument("--num-transitions", type=positive_int, default=10_000)
+    parser.add_argument("--num-episodes", type=positive_int, default=500)
+    parser.add_argument(
+        "--num-envs",
+        type=positive_int,
+        default=100,
+        help="episodes rolled out in parallel (default: 100)",
+    )
     parser.add_argument(
         "--episode-length",
         type=episode_length,
         default=200,
-        help="maximum transitions per episode, capped at 200 (default: 200)",
+        help=f"transitions per episode, at most {_MAX_EPISODE_LENGTH} (default: 200)",
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--deterministic-fraction",
         type=fraction,
-        default=0.7,
-        help="share of actions from the deterministic expert policy (default: 0.7)",
+        default=0.4,
+        help="share of actions from the deterministic expert policy (default: 0.4)",
     )
     parser.add_argument(
         "--stochastic-fraction",
         type=fraction,
-        default=0.2,
-        help="share of actions sampled from the expert policy (default: 0.2)",
+        default=0.3,
+        help="share of actions sampled from the expert policy (default: 0.3)",
+    )
+    parser.add_argument(
+        "--resolutions",
+        type=parse_resolution,
+        nargs="+",
+        default=[(64, 64), (256, 256)],
+        metavar="HxW",
+        help="frame sizes to render, e.g. 64x64 for DreamerV3 and 256x256 for "
+        "V-JEPA 2 (default: 64x64 256x256)",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("data/cartpole_trajectories"),
-        help="directory containing uniquely named collection directories (default: data)",
+        help="directory containing uniquely named collection directories",
     )
     parser.add_argument(
         "--collection-id",
@@ -88,7 +128,6 @@ def parse_args() -> argparse.Namespace:
         help="use the PPO training reset distribution (default: enabled)",
     )
     parser.add_argument("--camera", default="fixed")
-    parser.add_argument("--render-batch-size", type=positive_int, default=128)
     return parser.parse_args()
 
 
@@ -121,26 +160,51 @@ def shuffled_action_sources(counts: np.ndarray, seed: int) -> np.ndarray:
     return sources
 
 
-def render_images(
-    env, states, camera: str, batch_size: int, directory: Path, name: str
-):
-    """Renders states in batches into a disk-backed array to limit host memory use."""
-    images = None
-    for start in range(0, len(states), batch_size):
-        stop = min(start + batch_size, len(states))
-        frames = np.asarray(env.render(states[start:stop], camera=camera))
-        if images is None:
-            images = np.lib.format.open_memmap(
-                directory / f"{name}.npy",
-                mode="w+",
-                dtype=frames.dtype,
-                shape=(len(states), *frames.shape[1:]),
+def make_batched_rollout(env, deterministic_policy, stochastic_policy):
+    """Builds a jitted rollout of parallel episodes following a source schedule.
+
+    The returned function maps reset keys ``(B,)``, a schedule ``(B, T)`` of
+    action-source indices, and a key to the initial and per-step arrays, all
+    batch-major: ``initial`` has ``(B, ...)`` and ``steps`` ``(B, T, ...)``.
+    """
+
+    def rollout(reset_keys, sources, rng):
+        state = jax.vmap(env.reset)(reset_keys)
+
+        def step(state, inputs):
+            source, key = inputs
+            deterministic_key, stochastic_key, random_key = jax.random.split(key, 3)
+            deterministic = deterministic_policy(state.obs, deterministic_key)[0]
+            stochastic = stochastic_policy(state.obs, stochastic_key)[0]
+            uniform = jax.random.uniform(
+                random_key, deterministic.shape, deterministic.dtype, -1.0, 1.0
             )
-        images[start:stop] = frames
-    if images is None:
-        raise ValueError("Cannot render an empty transition dataset")
-    images.flush()
-    return images
+            source = source[:, None]
+            action = jnp.where(
+                source == 0, deterministic, jnp.where(source == 1, stochastic, uniform)
+            )
+            next_state = jax.vmap(env.step)(state, action)
+            record = {
+                "observations": next_state.obs,
+                "actions": action,
+                "rewards": next_state.reward,
+                "dones": next_state.done,
+                "qpos": next_state.data.qpos,
+                "qvel": next_state.data.qvel,
+            }
+            return next_state, record
+
+        step_keys = jax.random.split(rng, sources.shape[1])
+        _, steps = jax.lax.scan(step, state, (sources.T, step_keys))
+        initial = {
+            "observations": state.obs,
+            "qpos": state.data.qpos,
+            "qvel": state.data.qvel,
+        }
+        steps = jax.tree.map(lambda values: jnp.swapaxes(values, 0, 1), steps)
+        return initial, steps
+
+    return jax.jit(rollout)
 
 
 def main() -> None:
@@ -151,9 +215,14 @@ def main() -> None:
     mlflow.set_tracking_uri(tracking_uri)
 
     counts = action_counts(
-        args.num_transitions, args.deterministic_fraction, args.stochastic_fraction
+        args.num_episodes * args.episode_length,
+        args.deterministic_fraction,
+        args.stochastic_fraction,
     )
-    action_sources = shuffled_action_sources(counts, args.seed)
+    schedule = shuffled_action_sources(counts, args.seed).reshape(
+        args.num_episodes, args.episode_length
+    )
+    resolutions = list(dict.fromkeys(args.resolutions))
     collection_id = args.collection_id or uuid.uuid4().hex
     output_dir = args.output_dir / collection_id
     if output_dir.exists():
@@ -172,113 +241,69 @@ def main() -> None:
                 args.mlflow_experiment, Path(checkpoint_dir)
             )
             selection_mode = "best_experiment_run"
-        deterministic_policy = jax.jit(
-            load_policy(env, checkpoint_path, deterministic=True)
+        rollout = make_batched_rollout(
+            env,
+            load_policy(env, checkpoint_path, deterministic=True),
+            load_policy(env, checkpoint_path, deterministic=False),
         )
-        stochastic_policy = jax.jit(
-            load_policy(env, checkpoint_path, deterministic=False)
-        )
 
-        reset = jax.jit(env.reset)
-        step = jax.jit(env.step)
-        rng = jax.random.key(args.seed)
-        rng, reset_rng = jax.random.split(rng)
-        state = jax.block_until_ready(reset(reset_rng))
-
-        observations = []
-        actions = []
-        next_observations = []
-        rewards = []
-        dones = []
-        terminated = []
-        truncated = []
-        episode_ids = []
-        timesteps = []
-        states = []
-        next_states = []
-        episode_id = 0
-        timestep = 0
-
-        for transition_index, source in enumerate(action_sources):
-            rng, action_rng = jax.random.split(rng)
-            if source == 0:
-                action = deterministic_policy(state.obs, action_rng)[0]
-            elif source == 1:
-                action = stochastic_policy(state.obs, action_rng)[0]
-            else:
-                action = jax.random.uniform(
-                    action_rng,
-                    (env.action_size,),
-                    minval=-1.0,
-                    maxval=1.0,
-                    dtype=state.obs.dtype,
-                )
-
-            next_state = step(state, action)
-            observation, action_value, next_observation, reward, done = jax.device_get(
-                (
-                    state.obs,
-                    action,
-                    next_state.obs,
-                    next_state.reward,
-                    next_state.done,
+    batch_size = min(args.num_envs, args.num_episodes)
+    rng = jax.random.key(args.seed)
+    episodes_low_dim = []
+    manifest_episodes = []
+    with FrameRenderer(env.mj_model, resolutions, args.camera) as renderer:
+        for batch_index, first in enumerate(range(0, args.num_episodes, batch_size)):
+            ids = np.arange(first, min(first + batch_size, args.num_episodes))
+            # Pad the last batch to the compiled batch size and drop the extras.
+            batch_sources = schedule[np.resize(ids, batch_size)]
+            batch_rng = jax.random.fold_in(rng, batch_index)
+            reset_rng, step_rng = jax.random.split(batch_rng)
+            initial, steps = jax.device_get(
+                rollout(
+                    jax.random.split(reset_rng, batch_size),
+                    jnp.asarray(batch_sources),
+                    step_rng,
                 )
             )
-            observations.append(np.asarray(observation, dtype=np.float32))
-            actions.append(np.asarray(action_value, dtype=np.float32))
-            next_observations.append(np.asarray(next_observation, dtype=np.float32))
-            rewards.append(np.float32(reward))
-            terminated_transition = bool(done)
-            truncated_transition = timestep + 1 >= args.episode_length
-            episode_done = terminated_transition or truncated_transition
-            dones.append(episode_done)
-            terminated.append(terminated_transition)
-            truncated.append(truncated_transition)
-            episode_ids.append(episode_id)
-            timesteps.append(timestep)
-            states.append(state)
-            next_states.append(next_state)
+            batch_episodes = split_batched_episodes(initial, steps, batch_sources)
+            for episode_id, episode in zip(ids, batch_episodes, strict=False):
+                episodes_low_dim.append((int(episode_id), episode))
+                frames = {
+                    frames_key(*resolution): renderer.render(
+                        episode["qpos"], episode["qvel"], resolution=resolution
+                    )
+                    for resolution in resolutions
+                }
+                length = write_episode(output_dir, int(episode_id), episode | frames)
+                manifest_episodes.append(
+                    {
+                        "id": int(episode_id),
+                        "file": str(
+                            episode_path(output_dir, int(episode_id)).relative_to(
+                                output_dir
+                            )
+                        ),
+                        "length": length,
+                        "terminated": bool(episode["terminated"]),
+                    }
+                )
+            print(f"Collected episodes {ids[0]}-{ids[-1]} of {args.num_episodes}")
+        resolution_entries = [
+            {
+                "key": frames_key(height, width),
+                "height": height,
+                "width": width,
+                "fovy": renderer.fovy(height, width),
+            }
+            for height, width in resolutions
+        ]
 
-            if episode_done and transition_index + 1 < len(action_sources):
-                rng, reset_rng = jax.random.split(rng)
-                state = jax.block_until_ready(reset(reset_rng))
-                episode_id += 1
-                timestep = 0
-            else:
-                state = next_state
-                timestep += 1
-
-    observations_array = np.stack(observations)
-    actions_array = np.stack(actions)
-    next_observations_array = np.stack(next_observations)
-    rewards_array = np.asarray(rewards, dtype=np.float32)
-    dones_array = np.asarray(dones, dtype=np.bool_)
-    terminated_array = np.asarray(terminated, dtype=np.bool_)
-    truncated_array = np.asarray(truncated, dtype=np.bool_)
-    episode_ids_array = np.asarray(episode_ids, dtype=np.int32)
-    timesteps_array = np.asarray(timesteps, dtype=np.int32)
-    if not (
-        len(action_sources)
-        == len(observations_array)
-        == len(actions_array)
-        == len(next_observations_array)
-        == len(states)
-        == len(next_states)
-    ):
-        raise RuntimeError("Transition fields are not aligned")
-    if not all(
-        np.isfinite(values).all()
-        for values in (observations_array, actions_array, next_observations_array)
-    ):
-        raise RuntimeError("Collected non-finite observation or action values")
-    if not np.array_equal(
-        dones_array, np.logical_or(terminated_array, truncated_array)
-    ):
-        raise RuntimeError("Episode boundary fields are inconsistent")
-    if np.any(np.bincount(episode_ids_array) > args.episode_length):
-        raise RuntimeError("Collected an episode longer than --episode-length")
-
+    transitions = episodes_to_transitions(episodes_low_dim)
+    collected_counts = np.bincount(
+        transitions["action_source"], minlength=len(_ACTION_SOURCES)
+    )
     collection_parameters = {
+        "format_version": FORMAT_VERSION,
         "collection_id": collection_id,
         "environment": "CartpoleBalance",
         "mlflow_tracking_uri": tracking_uri,
@@ -289,12 +314,15 @@ def main() -> None:
         "seed": args.seed,
         "full_circle_reset": args.full_circle_reset,
         "camera": args.camera,
-        "render_batch_size": args.render_batch_size,
-        "num_transitions": args.num_transitions,
+        "control_dt": float(env.dt),
+        "observation_names": list(OBSERVATION_NAMES),
+        "resolutions": resolution_entries,
+        "num_envs": batch_size,
+        "num_episodes": args.num_episodes,
+        "num_transitions": len(transitions["actions"]),
         "episode_length": args.episode_length,
-        "num_episodes": int(episode_ids_array[-1]) + 1,
-        "num_terminated": int(terminated_array.sum()),
-        "num_truncated": int(truncated_array.sum()),
+        "num_terminated": int(transitions["terminated"].sum()),
+        "num_truncated": int(transitions["truncated"].sum()),
         "action_fractions": {
             "deterministic": args.deterministic_fraction,
             "stochastic": args.stochastic_fraction,
@@ -306,56 +334,23 @@ def main() -> None:
                 12,
             ),
         },
-        "action_counts": dict(zip(_ACTION_SOURCES, map(int, counts), strict=True)),
+        "action_counts": dict(
+            zip(_ACTION_SOURCES, map(int, collected_counts), strict=True)
+        ),
+        "episodes": manifest_episodes,
     }
-    metadata = json.dumps(collection_parameters, sort_keys=True)
-    shared_arrays = {
-        "observations": observations_array,
-        "actions": actions_array,
-        "next_observations": next_observations_array,
-        "rewards": rewards_array,
-        "dones": dones_array,
-        "terminated": terminated_array,
-        "truncated": truncated_array,
-        "episode_ids": episode_ids_array,
-        "timesteps": timesteps_array,
-        "action_source": action_sources,
-        "action_source_names": np.asarray(_ACTION_SOURCES),
-        "metadata": np.asarray(metadata),
-    }
-
-    with tempfile.TemporaryDirectory(
-        prefix="cartpole_render_", dir=output_dir
-    ) as render_dir:
-        images = render_images(
-            env,
-            states,
-            args.camera,
-            args.render_batch_size,
-            Path(render_dir),
-            "images",
-        )
-        next_images = render_images(
-            env,
-            next_states,
-            args.camera,
-            args.render_batch_size,
-            Path(render_dir),
-            "next_images",
-        )
-        if len(images) != len(observations_array) or len(next_images) != len(
-            next_observations_array
-        ):
-            raise RuntimeError("Rendered images are not aligned with transitions")
-        np.savez_compressed(
-            output_dir / "image_transitions.npz",
-            **shared_arrays,
-            images=images,
-            next_images=next_images,
-        )
-
-    np.savez_compressed(output_dir / "transitions.npz", **shared_arrays)
-    (output_dir / "collection.json").write_text(
+    np.savez_compressed(
+        output_dir / "transitions.npz",
+        **transitions,
+        action_source_names=np.asarray(_ACTION_SOURCES),
+        metadata=np.asarray(
+            json.dumps(
+                {k: v for k, v in collection_parameters.items() if k != "episodes"},
+                sort_keys=True,
+            )
+        ),
+    )
+    (output_dir / MANIFEST_NAME).write_text(
         json.dumps(collection_parameters, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
@@ -364,11 +359,13 @@ def main() -> None:
         print(f"Selected run: {run_id} (deterministic_mean_return not logged)")
     else:
         print(f"Selected run: {run_id} (deterministic_mean_return={score:.3f})")
-    print(f"Action counts: {dict(zip(_ACTION_SOURCES, map(int, counts), strict=True))}")
+    print(f"Action counts: {collection_parameters['action_counts']}")
     print(f"Collection: {output_dir}")
-    print(f"Parameters: {output_dir / 'collection.json'}")
-    print(f"Transitions: {output_dir / 'transitions.npz'} {observations_array.shape}")
-    print(f"Image transitions: {output_dir / 'image_transitions.npz'} {images.shape}")
+    print(f"Episodes: {output_dir / 'episodes'} ({args.num_episodes} shards)")
+    print(f"Frames: {', '.join(entry['key'] for entry in resolution_entries)}")
+    print(
+        f"Transitions: {output_dir / 'transitions.npz'} {transitions['actions'].shape}"
+    )
 
 
 if __name__ == "__main__":

@@ -2,8 +2,8 @@
 
 import argparse
 import time
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Sequence
+from typing import Any, Self
 
 import jax
 import jax.numpy as jnp
@@ -12,6 +12,9 @@ import mujoco.viewer
 import numpy as np
 from mujoco_playground import registry
 from mujoco_playground._src.mjx_env import MjxEnv
+
+# Frame size whose horizontal camera view every rendered resolution reproduces.
+REFERENCE_HEIGHT, REFERENCE_WIDTH = 240, 320
 
 
 def positive_int(value: str) -> int:
@@ -51,6 +54,114 @@ def load_cartpole(*, full_circle_reset: bool = False) -> MjxEnv:
         env._reset_randomize = reset_full_circle  # pyright: ignore[reportPrivateUsage]
 
     return env
+
+
+def parse_resolution(value: str) -> tuple[int, int]:
+    """Parses ``HEIGHTxWIDTH`` (or a single side for square frames) into a size."""
+    try:
+        sides = tuple(int(side) for side in value.lower().split("x"))
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must look like 64x64 or 64") from error
+    if len(sides) == 1:
+        sides = sides * 2
+    if len(sides) != 2 or min(sides) < 1:
+        raise argparse.ArgumentTypeError("must look like 64x64 or 64")
+    return sides
+
+
+def matched_fovy(fovy: float, height: int, width: int) -> float:
+    """Vertical field of view, in degrees, keeping the horizontal view of a 320x240 frame.
+
+    MuJoCo's ``fovy`` is vertical, so square crops of the ``fixed`` camera would
+    otherwise lose the rail ends and hide the cart near the slider limits.
+    """
+    half_tan = np.tan(np.deg2rad(fovy) / 2) * (REFERENCE_WIDTH / REFERENCE_HEIGHT)
+    return float(np.rad2deg(2 * np.arctan(half_tan * height / width)))
+
+
+class FrameRenderer:
+    """Renders rows of ``qpos``/``qvel`` at fixed resolutions of one camera.
+
+    Every resolution keeps the reference horizontal field of view (see
+    ``matched_fovy``). One MuJoCo renderer per resolution is created up front and
+    reused, since creating renderers costs far more than rendering a frame.
+    Close it (or use it as a context manager): a garbage-collected renderer can
+    free a GL context another renderer still uses, which corrupts its frames.
+    Rendering is much faster headless, with ``MUJOCO_GL=egl``, than through GLFW.
+    """
+
+    def __init__(
+        self,
+        mj_model: mujoco.MjModel,
+        resolutions: Sequence[tuple[int, int]],
+        camera: str,
+    ):
+        self._model = mj_model
+        self._data = mujoco.MjData(mj_model)
+        self._camera = camera
+        self._camera_id = mj_model.camera(camera).id
+        self._fovy = float(mj_model.cam_fovy[self._camera_id])
+        self._renderers: dict[tuple[int, int], mujoco.Renderer] = {}
+        try:
+            for height, width in dict.fromkeys(resolutions):
+                self._renderers[height, width] = mujoco.Renderer(
+                    mj_model, height=height, width=width
+                )
+        except Exception:
+            self.close()
+            raise
+
+    def fovy(self, height: int, width: int) -> float:
+        """Vertical field of view used for frames of this resolution."""
+        return matched_fovy(self._fovy, height, width)
+
+    def render(
+        self,
+        qpos: np.ndarray,
+        qvel: np.ndarray | None = None,
+        *,
+        resolution: tuple[int, int],
+    ) -> np.ndarray:
+        height, width = resolution
+        renderer = self._renderers[height, width]
+        frames = np.empty((len(qpos), height, width, 3), dtype=np.uint8)
+        try:
+            self._model.cam_fovy[self._camera_id] = self.fovy(height, width)
+            for index, positions in enumerate(qpos):
+                self._data.qpos[:] = positions
+                if qvel is not None:
+                    self._data.qvel[:] = qvel[index]
+                mujoco.mj_forward(self._model, self._data)
+                renderer.update_scene(self._data, camera=self._camera)
+                frames[index] = renderer.render()
+        finally:
+            self._model.cam_fovy[self._camera_id] = self._fovy
+        return frames
+
+    def close(self) -> None:
+        for renderer in self._renderers.values():
+            renderer.close()
+        self._renderers.clear()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
+
+
+def render_frames(
+    mj_model: mujoco.MjModel,
+    qpos: np.ndarray,
+    qvel: np.ndarray | None = None,
+    *,
+    height: int,
+    width: int,
+    camera: str,
+) -> np.ndarray:
+    """Renders rows of ``qpos``/``qvel`` once; prefer ``FrameRenderer`` in loops."""
+    with FrameRenderer(mj_model, [(height, width)], camera) as renderer:
+        return renderer.render(qpos, qvel, resolution=(height, width))
 
 
 def run_live_rollout[Carry](
