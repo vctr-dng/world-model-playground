@@ -176,6 +176,18 @@ def episodes_to_transitions(
     }
 
 
+def step_windows(num_steps: int, context: int) -> np.ndarray:
+    """Indices ``(num_steps, context)`` of the steps ending at each step.
+
+    Row ``t`` is ``t-context+1 .. t``; steps before the episode start repeat
+    step 0, so every step of an episode, including the first, gets a window.
+    """
+    if num_steps < 1 or context < 1:
+        raise ValueError("num_steps and context must be at least 1")
+    offsets = np.arange(1 - context, 1)
+    return np.maximum(np.arange(num_steps)[:, None] + offsets, 0)
+
+
 def split_batched_episodes(
     initial: dict[str, np.ndarray],
     steps: dict[str, np.ndarray],
