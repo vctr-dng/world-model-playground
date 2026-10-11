@@ -1,0 +1,136 @@
+"""Tests for episodic collections."""
+
+import json
+
+import numpy as np
+import pytest
+
+from world_model_playground.wm import data, episodes
+
+
+def make_episode(length: int, *, seed: int, terminated: bool = False) -> dict:
+    """Builds a valid episode whose frames encode their step index."""
+    rng = np.random.default_rng(seed)
+    frames = np.zeros((length + 1, 4, 6, 3), dtype=np.uint8)
+    frames[:, 0, 0, 0] = np.arange(length + 1)
+    frames[:, 0, 0, 1] = seed
+    return {
+        "observations": rng.normal(size=(length + 1, 5)).astype(np.float32),
+        "actions": rng.uniform(-1, 1, size=(length, 1)).astype(np.float32),
+        "rewards": rng.uniform(size=length).astype(np.float32),
+        "action_source": rng.integers(0, 3, size=length).astype(np.uint8),
+        "qpos": rng.normal(size=(length + 1, 2)).astype(np.float32),
+        "qvel": rng.normal(size=(length + 1, 2)).astype(np.float32),
+        "terminated": np.asarray(terminated),
+        "truncated": np.asarray(not terminated),
+        episodes.frames_key(4, 6): frames,
+    }
+
+
+@pytest.fixture
+def collection(tmp_path):
+    """Writes a three-episode collection with a format-2 manifest."""
+    lengths = {0: 5, 1: 3, 2: 7}
+    entries = []
+    for episode_id, length in lengths.items():
+        episode = make_episode(length, seed=episode_id, terminated=episode_id == 1)
+        assert episodes.write_episode(tmp_path, episode_id, episode) == length
+        entries.append({"id": episode_id, "length": length})
+    manifest = {
+        "format_version": episodes.FORMAT_VERSION,
+        "resolutions": [{"key": "frames_4x6", "height": 4, "width": 6}],
+        "episodes": entries,
+    }
+    (tmp_path / episodes.MANIFEST_NAME).write_text(json.dumps(manifest))
+    return tmp_path
+
+
+def test_write_and_load_round_trip_selected_fields(tmp_path):
+    episode = make_episode(4, seed=0)
+    episodes.write_episode(tmp_path, 3, episode)
+
+    loaded = episodes.load_episode(tmp_path, 3, fields=("actions", "frames_4x6"))
+
+    assert set(loaded) == {"actions", "frames_4x6"}
+    np.testing.assert_array_equal(loaded["actions"], episode["actions"])
+    np.testing.assert_array_equal(loaded["frames_4x6"], episode["frames_4x6"])
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("observations", np.zeros((4, 5)), "observations must have shape"),
+        ("qpos", np.zeros((3, 2)), "qpos must have shape"),
+        ("frames_4x6", np.zeros((5, 4, 6, 3), dtype=np.float32), "uint8"),
+        ("frames_4x6", np.zeros((5, 8, 6, 3), dtype=np.uint8), "does not match"),
+        ("rewards", np.full(4, np.nan, dtype=np.float32), "finite"),
+    ],
+)
+def test_validate_episode_rejects_malformed_fields(field, value, message):
+    episode = make_episode(4, seed=0) | {field: value}
+
+    with pytest.raises(ValueError, match=message):
+        episodes.validate_episode(episode)
+
+
+def test_split_batched_episodes_cuts_at_first_done():
+    batch, horizon = 2, 4
+    initial = {
+        "observations": np.full((batch, 5), -1.0),
+        "qpos": np.full((batch, 2), -1.0),
+        "qvel": np.full((batch, 2), -1.0),
+    }
+    steps = {
+        "observations": np.arange(batch * horizon * 5, dtype=float).reshape(
+            batch, horizon, 5
+        ),
+        "qpos": np.zeros((batch, horizon, 2)),
+        "qvel": np.zeros((batch, horizon, 2)),
+        "actions": np.zeros((batch, horizon, 1)),
+        "rewards": np.ones((batch, horizon)),
+        "dones": np.array([[0, 0, 0, 0], [0, 1, 1, 0]], dtype=float),
+    }
+    sources = np.array([[0, 1, 2, 0], [2, 2, 1, 1]], dtype=np.uint8)
+
+    full, cut = episodes.split_batched_episodes(initial, steps, sources)
+
+    assert episodes.validate_episode(full) == 4
+    assert bool(full["truncated"]) and not bool(full["terminated"])
+    assert episodes.validate_episode(cut) == 2
+    assert bool(cut["terminated"]) and not bool(cut["truncated"])
+    np.testing.assert_array_equal(cut["observations"][0], initial["observations"][1])
+    np.testing.assert_array_equal(cut["observations"][1:], steps["observations"][1, :2])
+    np.testing.assert_array_equal(cut["action_source"], [2, 2])
+
+
+def test_episodes_to_transitions_matches_the_flat_format(collection):
+    loaded = [(i, episodes.load_episode(collection, i)) for i in (0, 1, 2)]
+
+    transitions = episodes.episodes_to_transitions(loaded)
+
+    assert data.validate_transitions(transitions) == 15
+    np.testing.assert_array_equal(
+        transitions["episode_ids"], np.repeat([0, 1, 2], [5, 3, 7])
+    )
+    np.testing.assert_array_equal(transitions["timesteps"][5:8], [0, 1, 2])
+    np.testing.assert_array_equal(
+        transitions["next_observations"][5:8], loaded[1][1]["observations"][1:]
+    )
+    assert np.flatnonzero(transitions["dones"]).tolist() == [4, 7, 14]
+    assert np.flatnonzero(transitions["terminated"]).tolist() == [7]
+    assert np.flatnonzero(transitions["truncated"]).tolist() == [4, 14]
+
+
+def test_transition_frames_index_like_the_flat_image_arrays(collection):
+    loaded = [episodes.load_episode(collection, i)["frames_4x6"] for i in (0, 1, 2)]
+    images = np.concatenate([frames[:-1] for frames in loaded])
+    next_images = np.concatenate([frames[1:] for frames in loaded])
+
+    view = episodes.TransitionFrames(collection, "frames_4x6", cache_size=1)
+    next_view = episodes.TransitionFrames(collection, "frames_4x6", following=True)
+
+    assert view.shape == images.shape and len(view) == 15
+    np.testing.assert_array_equal(view[6], images[6])
+    np.testing.assert_array_equal(view[np.array([14, 0, 7])], images[[14, 0, 7]])
+    np.testing.assert_array_equal(next_view[3:9], next_images[3:9])
+    assert view[np.array([], dtype=int)].shape == (0, 4, 6, 3)
