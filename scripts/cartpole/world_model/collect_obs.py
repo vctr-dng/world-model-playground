@@ -103,6 +103,14 @@ def parse_args() -> argparse.Namespace:
         help="share of actions sampled from the expert policy (default: 0.3)",
     )
     parser.add_argument(
+        "--source-hold",
+        type=positive_int,
+        default=1,
+        help="steps each scheduled action source is kept, with one uniform random "
+        "action held over a random segment; longer holds show the sustained effect "
+        "of a force, which planning models must predict (default: 1)",
+    )
+    parser.add_argument(
         "--resolutions",
         type=parse_resolution,
         nargs="+",
@@ -160,25 +168,48 @@ def shuffled_action_sources(counts: np.ndarray, seed: int) -> np.ndarray:
     return sources
 
 
+def held_schedule(
+    num_episodes: int,
+    episode_length: int,
+    fractions: tuple[float, float],
+    hold: int,
+    seed: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Action-source schedule ``(E, T)`` and random actions ``(E, T, 1)``.
+
+    Sources are drawn per segment of ``hold`` steps, with exact proportions over
+    the segments, and each random segment holds one uniform action.
+    """
+    segments = -(-episode_length // hold)
+    counts = action_counts(num_episodes * segments, *fractions)
+    sources = shuffled_action_sources(counts, seed).reshape(num_episodes, segments)
+    uniform = np.random.default_rng(seed).uniform(
+        -1.0, 1.0, size=(num_episodes, segments, 1)
+    )
+
+    def per_step(values):
+        return np.repeat(values, hold, axis=1)[:, :episode_length]
+
+    return per_step(sources), per_step(uniform).astype(np.float32)
+
+
 def make_batched_rollout(env, deterministic_policy, stochastic_policy):
     """Builds a jitted rollout of parallel episodes following a source schedule.
 
     The returned function maps reset keys ``(B,)``, a schedule ``(B, T)`` of
-    action-source indices, and a key to the initial and per-step arrays, all
-    batch-major: ``initial`` has ``(B, ...)`` and ``steps`` ``(B, T, ...)``.
+    action-source indices, the random actions ``(B, T, 1)`` used by the random
+    source, and a key to the initial and per-step arrays, all batch-major:
+    ``initial`` has ``(B, ...)`` and ``steps`` ``(B, T, ...)``.
     """
 
-    def rollout(reset_keys, sources, rng):
+    def rollout(reset_keys, sources, random_actions, rng):
         state = jax.vmap(env.reset)(reset_keys)
 
         def step(state, inputs):
-            source, key = inputs
-            deterministic_key, stochastic_key, random_key = jax.random.split(key, 3)
+            source, uniform, key = inputs
+            deterministic_key, stochastic_key = jax.random.split(key)
             deterministic = deterministic_policy(state.obs, deterministic_key)[0]
             stochastic = stochastic_policy(state.obs, stochastic_key)[0]
-            uniform = jax.random.uniform(
-                random_key, deterministic.shape, deterministic.dtype, -1.0, 1.0
-            )
             source = source[:, None]
             action = jnp.where(
                 source == 0, deterministic, jnp.where(source == 1, stochastic, uniform)
@@ -195,7 +226,9 @@ def make_batched_rollout(env, deterministic_policy, stochastic_policy):
             return next_state, record
 
         step_keys = jax.random.split(rng, sources.shape[1])
-        _, steps = jax.lax.scan(step, state, (sources.T, step_keys))
+        _, steps = jax.lax.scan(
+            step, state, (sources.T, jnp.swapaxes(random_actions, 0, 1), step_keys)
+        )
         initial = {
             "observations": state.obs,
             "qpos": state.data.qpos,
@@ -214,13 +247,12 @@ def main() -> None:
         raise ValueError("MLFLOW_TRACKING_URI must be set")
     mlflow.set_tracking_uri(tracking_uri)
 
-    counts = action_counts(
-        args.num_episodes * args.episode_length,
-        args.deterministic_fraction,
-        args.stochastic_fraction,
-    )
-    schedule = shuffled_action_sources(counts, args.seed).reshape(
-        args.num_episodes, args.episode_length
+    schedule, random_actions = held_schedule(
+        args.num_episodes,
+        args.episode_length,
+        (args.deterministic_fraction, args.stochastic_fraction),
+        args.source_hold,
+        args.seed,
     )
     resolutions = list(dict.fromkeys(args.resolutions))
     collection_id = args.collection_id or uuid.uuid4().hex
@@ -255,13 +287,15 @@ def main() -> None:
         for batch_index, first in enumerate(range(0, args.num_episodes, batch_size)):
             ids = np.arange(first, min(first + batch_size, args.num_episodes))
             # Pad the last batch to the compiled batch size and drop the extras.
-            batch_sources = schedule[np.resize(ids, batch_size)]
+            batch_rows = np.resize(ids, batch_size)
+            batch_sources = schedule[batch_rows]
             batch_rng = jax.random.fold_in(rng, batch_index)
             reset_rng, step_rng = jax.random.split(batch_rng)
             initial, steps = jax.device_get(
                 rollout(
                     jax.random.split(reset_rng, batch_size),
                     jnp.asarray(batch_sources),
+                    jnp.asarray(random_actions[batch_rows]),
                     step_rng,
                 )
             )
@@ -312,6 +346,7 @@ def main() -> None:
         "selection_metric": "deterministic_mean_return",
         "selection_metric_value": score,
         "seed": args.seed,
+        "source_hold": args.source_hold,
         "full_circle_reset": args.full_circle_reset,
         "camera": args.camera,
         "control_dt": float(env.dt),
