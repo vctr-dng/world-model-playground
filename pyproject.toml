@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "anywidget>=0.11.0",
     "brax>=0.14.2",
+    "einops>=0.8.2",
     "flax>=0.12.9",
     "imageio-ffmpeg>=0.6.0",
     "jax[cuda13]>=0.11.1",
@@ -15,11 +16,23 @@ dependencies = [
     "mediapy>=1.2.7",
     "mlflow>=3.16.0",
     "playground",
+    "timm>=1.0.30",
+    "torch>=2.14.1",
+    "torchvision>=0.29.1",
+    "transformers>=5.19.0",
 ]
 
 [tool.uv.sources]
 brax = { git = "https://github.com/google/brax.git", rev = "57d5b863fcc66a29a2e043182c07a14a3dee3a7c" }
 playground = { git = "https://github.com/google-deepmind/mujoco_playground.git" }
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+# CUDA 13 wheels, so torch shares the nvidia-* libraries pulled in by jax[cuda13].
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]
