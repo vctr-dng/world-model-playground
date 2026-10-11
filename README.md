@@ -63,11 +63,49 @@ uv run python scripts/cartpole/train_ppo.py \
 
 ### World models
 
-Collect transitions and rendered frames from the best PPO run in MLflow:
+Collect episodes from the best PPO run in MLflow. Episodes run in parallel MJX
+environments (`--num-envs`) and mix deterministic, stochastic, and uniformly
+random actions (40/30/30 by default) so learned models see off-expert states:
 
 ```bash
-uv run python scripts/cartpole/world_model/collect_obs.py
+uv run python scripts/cartpole/world_model/collect_obs.py \
+  --num-episodes 500 --episode-length 200 --resolutions 64x64 256x256
 ```
+
+Each collection directory holds:
+
+- `episodes/episode_<id>.npz`: one compressed shard per episode with
+  `observations` (T+1), `actions`, `rewards`, `action_source` (T), the physics
+  state `qpos`/`qvel` (T+1), and `frames_<H>x<W>` (T+1) for every resolution
+- `transitions.npz`: the flattened state-only transitions used by the linear model
+- `collection.json`: collection parameters, rendered resolutions, and episode index
+
+Every resolution keeps the horizontal view of the 320x240 `fixed` camera, so
+square frames still show the cart at both rail ends. 64x64 suits DreamerV3,
+256x256 suits V-JEPA 2 (resize it to 224x224 for DINOv2). Rendering defaults to
+headless EGL (`MUJOCO_GL=egl`), which is much faster than GLFW.
+
+`world_model_playground.wm.episodes` reads and validates shards,
+`wm.datasets.EpisodeClipDataset` serves fixed-length PyTorch clips of frames,
+observations, and actions, and `scripts/cartpole/world_model/visualize_obs.py`
+browses both episodic and older single-file collections.
+
+#### DreamerV3 export
+
+Export a collection as DreamerV3 episode files (`image`, `state`, `action`,
+`reward`, `discount`, `is_first`, `is_last`, `is_terminal`, one entry per step)
+in `train`/`validation`/`test` directories using the same episode split as the
+other models:
+
+```bash
+uv run python scripts/cartpole/world_model/export_dreamer.py \
+  --collection-dir data/cartpole_trajectories/<collection_id> --resolution 64x64
+```
+
+`--action-alignment preceding` (default) stores with each step the action that
+led to it, as `dreamerv3-torch` expects; `following` stores the action taken
+from it, as the original `dreamerv3` replay does. Resolutions that were not
+collected are re-rendered from the stored `qpos`/`qvel`.
 
 #### Linear Model
 
