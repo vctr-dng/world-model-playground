@@ -1,11 +1,11 @@
-"""Tests for episodic collections and the clip dataset."""
+"""Tests for episodic collections, their DreamerV3 view, and the clip dataset."""
 
 import json
 
 import numpy as np
 import pytest
 
-from world_model_playground.wm import data, datasets, episodes
+from world_model_playground.wm import data, datasets, dreamer, episodes
 
 
 def make_episode(length: int, *, seed: int, terminated: bool = False) -> dict:
@@ -134,6 +134,39 @@ def test_transition_frames_index_like_the_flat_image_arrays(collection):
     np.testing.assert_array_equal(view[np.array([14, 0, 7])], images[[14, 0, 7]])
     np.testing.assert_array_equal(next_view[3:9], next_images[3:9])
     assert view[np.array([], dtype=int)].shape == (0, 4, 6, 3)
+
+
+@pytest.mark.parametrize("alignment", dreamer.ACTION_ALIGNMENTS)
+def test_to_dreamer_episode_aligns_steps(alignment):
+    episode = make_episode(3, seed=4, terminated=True)
+
+    steps = dreamer.to_dreamer_episode(
+        episode, image_key="frames_4x6", action_alignment=alignment
+    )
+
+    assert {len(values) for values in steps.values()} == {4}
+    np.testing.assert_array_equal(steps["image"], episode["frames_4x6"])
+    np.testing.assert_array_equal(steps["reward"][1:], episode["rewards"])
+    assert steps["reward"][0] == 0.0
+    assert steps["is_first"].tolist() == [True, False, False, False]
+    assert steps["is_last"].tolist() == [False, False, False, True]
+    assert steps["is_terminal"].tolist() == [False, False, False, True]
+    assert steps["discount"].tolist() == [1.0, 1.0, 1.0, 0.0]
+    if alignment == "preceding":
+        np.testing.assert_array_equal(steps["action"][1:], episode["actions"])
+        assert steps["action"][0].tolist() == [0.0]
+    else:
+        np.testing.assert_array_equal(steps["action"][:-1], episode["actions"])
+        assert steps["action"][-1].tolist() == [0.0]
+
+
+def test_to_dreamer_episode_marks_truncation_as_non_terminal():
+    steps = dreamer.to_dreamer_episode(
+        make_episode(2, seed=0, terminated=False), image_key="frames_4x6"
+    )
+
+    assert not steps["is_terminal"].any()
+    assert steps["is_last"][-1]
 
 
 def test_clip_dataset_cuts_aligned_clips(collection):
