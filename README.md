@@ -61,6 +61,41 @@ uv run python scripts/cartpole/train_ppo.py \
   --render
 ```
 
+### World models
+
+Collect transitions and rendered frames from the best PPO run in MLflow:
+
+```bash
+uv run python scripts/cartpole/world_model/collect_obs.py
+```
+
+#### Linear Model
+
+Fit the linear residual baseline on a collection, then compare it against the
+real environment under MPC:
+
+```bash
+uv run python scripts/cartpole/world_model/linear_model.py \
+  --collection-dir data/cartpole_trajectories/<collection_id>
+uv run marimo edit scripts/cartpole/world_model/mpc_divergence.py
+```
+
+Reusable code lives in the `world_model_playground` package: `policy` restores
+PPO checkpoints, and `wm` holds the world-model data handling, models, and
+metrics. `wm.eval` scores any `predict_next(observations, actions)` callable,
+so new models report the same one-step and rollout RMSE as the linear baseline.
+
+Simulation, PPO, and data collection use JAX; learned world models use PyTorch.
+Both are built against CUDA 13 and can share the GPU in one process when
+`world_model_playground.wm.runtime.share_gpu_with_jax()` runs before the first
+JAX computation, which stops JAX from preallocating most of the GPU memory.
+
+Run the tests, including a JAX/PyTorch GPU-sharing check when a GPU is present:
+
+```bash
+uv run pytest
+```
+
 ## Docker
 
 ### MLflow
