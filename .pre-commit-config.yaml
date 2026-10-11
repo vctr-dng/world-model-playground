@@ -5,6 +5,10 @@ repos:
       - id: check-toml
       - id: trailing-whitespace
       - id: end-of-file-fixer
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.12.23
+    hooks:
+      - id: uv-lock
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.10
     hooks:
