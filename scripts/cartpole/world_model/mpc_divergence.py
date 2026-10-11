@@ -12,7 +12,6 @@ app = marimo.App(width="full")
 @app.cell
 def _():
     import json
-    import sys
     import tempfile
     from pathlib import Path
 
@@ -35,7 +34,6 @@ def _():
         mo,
         np,
         plt,
-        sys,
         tempfile,
         traitlets,
     )
@@ -60,11 +58,8 @@ def _(mo):
 
 
 @app.cell
-def _(mo, sys):
+def _(mo):
     project_root = mo.notebook_dir().parents[2]
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
-
     collection_dir = (
         project_root / "data/cartpole_trajectories/eb6b4f702db048849f96207af13bd57e"
     )
@@ -73,34 +68,18 @@ def _(mo, sys):
 
 
 @app.cell
-def _(collection_dir, json, model_path, np):
-    from scripts.cartpole.world_model.linear_model import (
-        LinearResidualDynamics,
-        Normalization,
-    )
+def _(collection_dir, json, model_path):
+    from world_model_playground.wm.linear import load_linear_model
 
     collection = json.loads((collection_dir / "collection.json").read_text())
-    with np.load(model_path, allow_pickle=False) as artifact:
-        world_model = LinearResidualDynamics(
-            feature_normalization=Normalization(
-                artifact["feature_mean"], artifact["feature_std"]
-            ),
-            delta_normalization=Normalization(
-                artifact["delta_mean"], artifact["delta_std"]
-            ),
-            weights=artifact["weights"],
-            bias=artifact["bias"],
-        )
+    world_model = load_linear_model(model_path)
     return collection, world_model
 
 
 @app.cell
 def _(Path, collection, jax, mlflow, tempfile):
-    from scripts.cartpole.world_model.collect_obs import (
-        load_policy,
-        select_run_checkpoint,
-    )
     from world_model_playground.cartpole import load_cartpole
+    from world_model_playground.policy import load_policy, select_run_checkpoint
 
     mlflow.set_tracking_uri(collection["mlflow_tracking_uri"])
     env = load_cartpole(full_circle_reset=collection["full_circle_reset"])
