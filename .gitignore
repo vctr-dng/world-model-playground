@@ -15,3 +15,6 @@ graphify-out/cache/
 
 # Collected datasets
 data/
+
+# Generated models and probes (shared through MLflow)
+artifacts/
