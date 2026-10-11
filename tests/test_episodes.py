@@ -1,11 +1,11 @@
-"""Tests for episodic collections."""
+"""Tests for episodic collections and the clip dataset."""
 
 import json
 
 import numpy as np
 import pytest
 
-from world_model_playground.wm import data, episodes
+from world_model_playground.wm import data, datasets, episodes
 
 
 def make_episode(length: int, *, seed: int, terminated: bool = False) -> dict:
@@ -134,3 +134,26 @@ def test_transition_frames_index_like_the_flat_image_arrays(collection):
     np.testing.assert_array_equal(view[np.array([14, 0, 7])], images[[14, 0, 7]])
     np.testing.assert_array_equal(next_view[3:9], next_images[3:9])
     assert view[np.array([], dtype=int)].shape == (0, 4, 6, 3)
+
+
+def test_clip_dataset_cuts_aligned_clips(collection):
+    dataset = datasets.EpisodeClipDataset(
+        collection, resolution=(4, 6), clip_length=4, episode_ids=[0, 1]
+    )
+
+    # Episode 0 has 6 frames (3 clip starts), episode 1 has 4 frames (1 start).
+    assert len(dataset) == 4
+    clip = dataset[2]
+    episode = episodes.load_episode(collection, 0)
+    assert clip["frames"].shape == (4, 3, 4, 6)
+    assert clip["frames"][:, 0, 0, 0].tolist() == [2, 3, 4, 5]
+    np.testing.assert_array_equal(clip["actions"].numpy(), episode["actions"][2:5])
+    np.testing.assert_array_equal(
+        clip["observations"].numpy(), episode["observations"][2:6]
+    )
+    assert clip["rewards"].shape == (3,)
+
+
+def test_clip_dataset_rejects_missing_resolution(collection):
+    with pytest.raises(ValueError, match="frames_64x64"):
+        datasets.EpisodeClipDataset(collection, resolution=(64, 64), clip_length=2)
