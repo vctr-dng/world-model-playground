@@ -265,6 +265,53 @@ half, and the latent model plans at the level of the linear model.
 Planning through the latent model costs about 1.1 s per step for 10 episodes
 (256 candidates x 30 steps x 4 iterations), against 0.04 s with MJX.
 
+##### Perturbations around balance
+
+To show the model sustained forces where balancing happens, collect episodes
+that start near upright and, while the pole is upright (cos θ > 0.9), start a
+perturbation with 5% chance per step: one uniform random force held for 10 to
+30 steps over the scheduled actions, after which the expert recovers the pole:
+
+```bash
+uv run python scripts/cartpole/world_model/collect_obs.py \
+  --num-episodes 200 --no-full-circle-reset \
+  --deterministic-fraction 0.6 --stochastic-fraction 0.3 --source-hold 10 \
+  --perturb-probability 0.05 --perturb-steps 10 30 --resolutions 256x256
+```
+
+Perturbations make up 26% of the steps and are recorded as a fourth action
+source; 49% of states are near upright (cos θ > 0.9), against 15% with held
+actions alone. Embedding, probe, and predictor then train as before. Near
+upright, after 10 to 30 steps of force, the latent model now predicts most of
+the true response:
+
+| Training data | latent: cart | latent: pole angle | linear: cart | linear: pole angle |
+| --- | --- | --- | --- | --- |
+| 100 episodes, sources mixed per step | 0.38 | -0.03 | 0.97 | 0.15 |
+| 200 episodes, `--source-hold 10` | 0.66 | 0.16 | 0.90 | 0.09 |
+| 200 episodes, perturbations around balance | 0.92 | 0.81 | 0.86 | -0.10 |
+
+and closed-loop balance return (10 episodes, same settings as above) reaches:
+
+| Controller | held-action data | perturbation data |
+| --- | --- | --- |
+| CEM, latent model (goal latent) | 127.3 ± 7.4 | 183.8 ± 2.1 |
+| CEM, latent model (reward) | 141.7 ± 7.3 | 175.5 ± 5.3 |
+| CEM, linear model | 121.4 ± 2.9 | 174.9 ± 5.4 |
+| CEM, true dynamics | 194.1 ± 1.2 | 194.1 ± 1.2 |
+
+With the goal latent, the planner keeps the pole upright 97% of the second
+half of each episode. Planning on the probe-decoded reward is held back by the
+decoded angular velocity: those plans push twice as hard as true-dynamics MPC
+and let the pole oscillate until it falls. Full-circle starts get worse (latent
+33 to 39), since this collection rarely shows a hanging pole; mix start
+distributions when swing-up matters.
+
+Training the predictor with a 24-step instead of an 8-step open-loop loss
+(`train_latent_wm.py --rollout-steps 24`) improves rollouts beyond 50 steps but
+degrades the first 10 to 25, which the 30-step planner relies on, and lowers
+balance return to 152.6 (reward) and 141.5 (goal latent).
+
 #### Linear Model
 
 Fit the linear residual baseline on a collection, then compare it against the
