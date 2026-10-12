@@ -235,7 +235,7 @@ def camera_model(collection, load_cartpole, matched_fovy, mujoco, np):
 
 @app.cell(hide_code=True)
 def draw_helpers(np, pole_segment, project):
-    SOURCE_COLORS = ("tab:blue", "tab:orange", "tab:red")
+    SOURCE_COLORS = ("tab:blue", "tab:orange", "tab:red", "tab:green")
 
     def draw_frame(ax, image, obs, title, action=None, overlay=True):
         """Shows a rendered frame, optionally with the pole implied by `obs` and the applied action."""

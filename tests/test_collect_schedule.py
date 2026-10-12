@@ -3,7 +3,11 @@
 import importlib.util
 from pathlib import Path
 
+import jax
+import jax.numpy as jnp
 import numpy as np
+
+from world_model_playground.cartpole import load_cartpole
 
 _SCRIPT = (
     Path(__file__).parents[1]
@@ -37,3 +41,65 @@ def test_held_schedule_with_a_hold_of_one_is_per_step():
 
     assert np.bincount(sources.ravel()).tolist() == [160, 120, 120]
     assert len(np.unique(uniform)) == uniform.size
+
+
+def zero_policy(observations, key):
+    del key
+    return jnp.zeros((observations.shape[0], 1), observations.dtype), {}
+
+
+def run_rollout(probability: float, *, full_circle: bool = False, steps: int = 60):
+    env = load_cartpole(full_circle_reset=full_circle)
+    rollout = collect_obs.make_batched_rollout(
+        env,
+        zero_policy,
+        zero_policy,
+        perturb_probability=probability,
+        perturb_steps=(5, 8),
+        perturb_upright=0.9,
+    )
+    batch = 6
+    sources = jnp.zeros((batch, steps), dtype=jnp.uint8)
+    random_actions = jnp.zeros((batch, steps, 1))
+    keys = jax.random.split(jax.random.key(0), batch)
+    _, records = jax.device_get(
+        rollout(keys, sources, random_actions, jax.random.key(1))
+    )
+    return records
+
+
+def test_perturbations_hold_one_force_for_the_requested_length():
+    records = run_rollout(probability=1.0)
+    perturbation = collect_obs._ACTION_SOURCES.index("perturbation")
+
+    for sources, actions in zip(records["sources"], records["actions"][..., 0]):
+        # Balance resets start upright, so a perturbation starts at step 0.
+        assert sources[0] == perturbation
+        flags = np.concatenate(([0], (sources == perturbation).astype(int), [0]))
+        starts = np.flatnonzero(np.diff(flags) == 1)
+        stops = np.flatnonzero(np.diff(flags) == -1)
+        for start, stop in zip(starts, stops, strict=True):
+            # With probability 1 perturbations follow each other without a gap,
+            # so a run is split where the held force changes.
+            run = actions[start:stop]
+            cuts = np.flatnonzero(np.diff(run)) + 1
+            lengths = np.diff(np.concatenate(([0], cuts, [len(run)])))
+            assert np.all(run != 0.0)
+            # The last piece may be cut short by the end of the episode.
+            truncated = stop == len(actions)
+            inner = lengths[:-1] if truncated else lengths
+            assert np.all((inner >= 5) & (inner <= 8)), lengths
+        # Outside perturbations the scheduled (zero) policy acts.
+        assert np.all(actions[sources != perturbation] == 0.0)
+
+
+def test_perturbations_only_start_upright_and_are_off_by_default():
+    assert not np.any(run_rollout(probability=0.0)["sources"])
+    hanging = run_rollout(probability=1.0, full_circle=True, steps=3)
+    perturbation = collect_obs._ACTION_SOURCES.index("perturbation")
+    upright_at_start = hanging["observations"][:, 0, 1] > 0.9
+    started = hanging["sources"][:, 0] == perturbation
+    # A perturbation can only start from a state that was upright.
+    assert not np.any(
+        started & ~upright_at_start & (hanging["observations"][:, 0, 1] < 0.5)
+    )

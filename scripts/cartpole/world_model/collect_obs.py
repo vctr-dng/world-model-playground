@@ -44,7 +44,9 @@ from world_model_playground.wm.episodes import (
     write_episode,
 )
 
-_ACTION_SOURCES = ("deterministic", "stochastic", "random")
+# Scheduled sources come first; perturbations override them while upright.
+_ACTION_SOURCES = ("deterministic", "stochastic", "random", "perturbation")
+_PERTURBATION = _ACTION_SOURCES.index("perturbation")
 _MAX_EPISODE_LENGTH = 1000  # CartpoleBalance's own time limit
 
 
@@ -111,6 +113,28 @@ def parse_args() -> argparse.Namespace:
         "of a force, which planning models must predict (default: 1)",
     )
     parser.add_argument(
+        "--perturb-probability",
+        type=fraction,
+        default=0.0,
+        help="per-step chance, while the pole is upright, of starting a "
+        "perturbation: one uniform random force held over the scheduled actions, "
+        "after which they recover the pole; 0 disables (default: 0)",
+    )
+    parser.add_argument(
+        "--perturb-steps",
+        type=positive_int,
+        nargs=2,
+        default=[10, 30],
+        metavar=("MIN", "MAX"),
+        help="range of perturbation lengths in steps (default: 10 30)",
+    )
+    parser.add_argument(
+        "--perturb-upright",
+        type=float,
+        default=0.9,
+        help="cos θ above which perturbations may start (default: 0.9)",
+    )
+    parser.add_argument(
         "--resolutions",
         type=parse_resolution,
         nargs="+",
@@ -163,7 +187,7 @@ def action_counts(
 
 def shuffled_action_sources(counts: np.ndarray, seed: int) -> np.ndarray:
     """Returns an exact, reproducibly shuffled action-source schedule."""
-    sources = np.repeat(np.arange(len(_ACTION_SOURCES), dtype=np.uint8), counts)
+    sources = np.repeat(np.arange(len(counts), dtype=np.uint8), counts)
     np.random.default_rng(seed).shuffle(sources)
     return sources
 
@@ -193,41 +217,83 @@ def held_schedule(
     return per_step(sources), per_step(uniform).astype(np.float32)
 
 
-def make_batched_rollout(env, deterministic_policy, stochastic_policy):
+def make_batched_rollout(
+    env,
+    deterministic_policy,
+    stochastic_policy,
+    *,
+    perturb_probability: float = 0.0,
+    perturb_steps: tuple[int, int] = (10, 30),
+    perturb_upright: float = 0.9,
+):
     """Builds a jitted rollout of parallel episodes following a source schedule.
 
     The returned function maps reset keys ``(B,)``, a schedule ``(B, T)`` of
     action-source indices, the random actions ``(B, T, 1)`` used by the random
     source, and a key to the initial and per-step arrays, all batch-major:
     ``initial`` has ``(B, ...)`` and ``steps`` ``(B, T, ...)``.
+
+    While the pole is upright (``cos θ > perturb_upright``), an episode that is
+    not already perturbed starts a perturbation with ``perturb_probability``
+    per step: one uniform force held for ``perturb_steps`` (inclusive range)
+    over the scheduled actions, which then have to recover the pole. Planning
+    models need such sustained forces near balance to learn what actions do.
+    ``steps["sources"]`` records the source of every executed action.
     """
+    shortest, longest = perturb_steps
 
     def rollout(reset_keys, sources, random_actions, rng):
         state = jax.vmap(env.reset)(reset_keys)
+        batch = sources.shape[0]
+        remaining = jnp.zeros(batch, dtype=jnp.int32)
+        force = jnp.zeros((batch, 1), dtype=state.obs.dtype)
 
-        def step(state, inputs):
+        def step(carry, inputs):
+            state, remaining, force = carry
             source, uniform, key = inputs
-            deterministic_key, stochastic_key = jax.random.split(key)
-            deterministic = deterministic_policy(state.obs, deterministic_key)[0]
-            stochastic = stochastic_policy(state.obs, stochastic_key)[0]
-            source = source[:, None]
+            keys = jax.random.split(key, 5)
+            deterministic = deterministic_policy(state.obs, keys[0])[0]
+            stochastic = stochastic_policy(state.obs, keys[1])[0]
+            scheduled = source[:, None]
             action = jnp.where(
-                source == 0, deterministic, jnp.where(source == 1, stochastic, uniform)
+                scheduled == 0,
+                deterministic,
+                jnp.where(scheduled == 1, stochastic, uniform),
             )
+            start = (
+                (remaining == 0)
+                & (state.obs[:, 1] > perturb_upright)
+                & (jax.random.uniform(keys[2], (batch,)) < perturb_probability)
+            )
+            remaining = jnp.where(
+                start,
+                jax.random.randint(keys[3], (batch,), shortest, longest + 1),
+                remaining,
+            )
+            force = jnp.where(
+                start[:, None],
+                jax.random.uniform(keys[4], force.shape, force.dtype, -1.0, 1.0),
+                force,
+            )
+            perturbed = remaining > 0
+            action = jnp.where(perturbed[:, None], force, action)
             next_state = jax.vmap(env.step)(state, action)
             record = {
                 "observations": next_state.obs,
                 "actions": action,
+                "sources": jnp.where(perturbed, _PERTURBATION, source),
                 "rewards": next_state.reward,
                 "dones": next_state.done,
                 "qpos": next_state.data.qpos,
                 "qvel": next_state.data.qvel,
             }
-            return next_state, record
+            return (next_state, jnp.maximum(remaining - 1, 0), force), record
 
         step_keys = jax.random.split(rng, sources.shape[1])
         _, steps = jax.lax.scan(
-            step, state, (sources.T, jnp.swapaxes(random_actions, 0, 1), step_keys)
+            step,
+            (state, remaining, force),
+            (sources.T, jnp.swapaxes(random_actions, 0, 1), step_keys),
         )
         initial = {
             "observations": state.obs,
@@ -242,6 +308,8 @@ def make_batched_rollout(env, deterministic_policy, stochastic_policy):
 
 def main() -> None:
     args = parse_args()
+    if args.perturb_steps[0] > args.perturb_steps[1]:
+        raise ValueError("--perturb-steps MIN must not exceed MAX")
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
     if not tracking_uri:
         raise ValueError("MLFLOW_TRACKING_URI must be set")
@@ -277,6 +345,9 @@ def main() -> None:
             env,
             load_policy(env, checkpoint_path, deterministic=True),
             load_policy(env, checkpoint_path, deterministic=False),
+            perturb_probability=args.perturb_probability,
+            perturb_steps=tuple(args.perturb_steps),
+            perturb_upright=args.perturb_upright,
         )
 
     batch_size = min(args.num_envs, args.num_episodes)
@@ -299,7 +370,9 @@ def main() -> None:
                     step_rng,
                 )
             )
-            batch_episodes = split_batched_episodes(initial, steps, batch_sources)
+            batch_episodes = split_batched_episodes(
+                initial, steps, steps["sources"].astype(np.uint8)
+            )
             for episode_id, episode in zip(ids, batch_episodes, strict=False):
                 episodes_low_dim.append((int(episode_id), episode))
                 frames = {
@@ -347,6 +420,11 @@ def main() -> None:
         "selection_metric_value": score,
         "seed": args.seed,
         "source_hold": args.source_hold,
+        "perturbation": {
+            "probability": args.perturb_probability,
+            "steps": list(args.perturb_steps),
+            "upright_cos": args.perturb_upright,
+        },
         "full_circle_reset": args.full_circle_reset,
         "camera": args.camera,
         "control_dt": float(env.dt),
