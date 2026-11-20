@@ -37,6 +37,11 @@ from world_model_playground.wm.runtime import torch_device
 PROBES = ("linear", "mlp")
 
 
+def probe_filename(kind: str, history: int, stride: int) -> str:
+    """``<probe>_h<history>.pt``, with ``_s<stride>`` for strided histories."""
+    return f"{kind}_h{history}" + (f"_s{stride}" if stride > 1 else "") + ".pt"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -53,6 +58,13 @@ def parse_args() -> argparse.Namespace:
         default=2,
         help="steps whose features are stacked; 2+ lets single-frame encoders "
         "see velocities (default: 2)",
+    )
+    parser.add_argument(
+        "--history-stride",
+        type=positive_int,
+        default=1,
+        help="control steps between stacked steps; match the step of a latent "
+        "model that predicts several control steps at once (default: 1)",
     )
     parser.add_argument(
         "--seed", type=int, default=0, help="episode split seed (default: 0)"
@@ -125,6 +137,7 @@ def main() -> None:
                     embeddings_dir, episode_ids, fields=("features", "observations")
                 ),
                 args.history,
+                args.history_stride,
             )
             for split, episode_ids in splits.items()
         }
@@ -134,6 +147,7 @@ def main() -> None:
                     arrays["train"],
                     arrays["validation"],
                     history=args.history,
+                    stride=args.history_stride,
                     ridges=args.ridges,
                     device=device,
                 )
@@ -143,6 +157,7 @@ def main() -> None:
                     arrays["train"],
                     arrays["validation"],
                     history=args.history,
+                    stride=args.history_stride,
                     hidden_sizes=args.hidden_sizes,
                     epochs=args.epochs,
                     seed=args.seed,
@@ -163,6 +178,7 @@ def main() -> None:
                     "collection_id": manifest["collection_id"],
                     "probe": kind,
                     "history": args.history,
+                    "history_stride": args.history_stride,
                     "seed": args.seed,
                     **{k: json.dumps(v) for k, v in fit.items()},
                 },
@@ -175,7 +191,7 @@ def main() -> None:
                 args.output_root
                 / manifest["collection_id"]
                 / embeddings_dir.name
-                / f"{kind}_h{args.history}.pt"
+                / probe_filename(kind, args.history, args.history_stride)
             )
             save_probe(path, probe, record)
             if os.environ.get("MLFLOW_TRACKING_URI"):

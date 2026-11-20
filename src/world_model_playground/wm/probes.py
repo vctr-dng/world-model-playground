@@ -1,7 +1,9 @@
 """State probes that read the CartPole observation back out of frozen features.
 
 A probe maps the features of the last ``history`` steps, concatenated, to the
-5-dimensional observation of the newest step. How well it does tells which
+5-dimensional observation of the newest step. The stacked steps are ``stride``
+control steps apart, so a probe can decode latent models whose steps span
+several control steps (V-JEPA 2-AC). How well it does tells which
 encoder keeps the cart position, pole angle, and velocities; the fitted probe is
 then the decoder from latents back to observations for costs and for metrics
 comparable with the state-space models.
@@ -27,18 +29,21 @@ GATE_OBSERVATIONS = ("cart_position", "cos_theta", "sin_theta")
 GATE_R2 = 0.95
 
 
-def stack_history(features: np.ndarray, history: int) -> np.ndarray:
-    """Concatenates each step's features with those of the ``history-1`` before it."""
-    return features[step_windows(len(features), history)].reshape(len(features), -1)
+def stack_history(features: np.ndarray, history: int, stride: int = 1) -> np.ndarray:
+    """Concatenates each step's features with those of ``history-1`` earlier steps."""
+    windows = step_windows(len(features), history, stride)
+    return features[windows].reshape(len(features), -1)
 
 
 def probe_arrays(
-    episodes: Mapping[int, Mapping[str, np.ndarray]], history: int
+    episodes: Mapping[int, Mapping[str, np.ndarray]], history: int, stride: int = 1
 ) -> tuple[np.ndarray, np.ndarray]:
     """Stacked features ``(N, history*D)`` and observations ``(N, 5)`` of all steps."""
     if not episodes:
         raise ValueError("no episodes to build probe arrays from")
-    features = [stack_history(e["features"], history) for e in episodes.values()]
+    features = [
+        stack_history(e["features"], history, stride) for e in episodes.values()
+    ]
     observations = [e["observations"] for e in episodes.values()]
     return (
         np.concatenate(features).astype(np.float32),
@@ -54,11 +59,13 @@ class StateProbe(nn.Module):
         input_dim: int,
         *,
         history: int,
+        stride: int = 1,
         hidden_sizes: Sequence[int] = (),
         output_dim: int = len(OBSERVATION_NAMES),
     ):
         super().__init__()
         self.history = history
+        self.stride = stride
         self.hidden_sizes = tuple(hidden_sizes)
         layers: list[nn.Module] = []
         width = input_dim
@@ -138,6 +145,7 @@ def fit_linear_probe(
     validation: tuple[np.ndarray, np.ndarray],
     *,
     history: int,
+    stride: int = 1,
     ridges: Sequence[float],
     device: torch.device,
 ) -> tuple[StateProbe, float]:
@@ -147,7 +155,7 @@ def fit_linear_probe(
     eigendecomposition of the Gram matrix solves every ridge strength.
     """
     features, targets = train
-    probe = StateProbe(features.shape[1], history=history).to(device)
+    probe = StateProbe(features.shape[1], history=history, stride=stride).to(device)
     probe.set_normalization(features, targets)
     with torch.no_grad():
         x = (torch.as_tensor(features, device=device) - probe.feature_mean) / (
@@ -181,6 +189,7 @@ def fit_mlp_probe(
     validation: tuple[np.ndarray, np.ndarray],
     *,
     history: int,
+    stride: int = 1,
     hidden_sizes: Sequence[int] = (512, 512),
     epochs: int = 100,
     batch_size: int = 1024,
@@ -193,7 +202,7 @@ def fit_mlp_probe(
     torch.manual_seed(seed)
     features, targets = train
     probe = StateProbe(
-        features.shape[1], history=history, hidden_sizes=hidden_sizes
+        features.shape[1], history=history, stride=stride, hidden_sizes=hidden_sizes
     ).to(device)
     probe.set_normalization(features, targets)
     x = torch.as_tensor(features, device=device)
@@ -233,6 +242,7 @@ def save_probe(path: Path, probe: StateProbe, metadata: Mapping[str, object]) ->
         {
             "input_dim": probe.head[0].in_features,
             "history": probe.history,
+            "stride": probe.stride,
             "hidden_sizes": list(probe.hidden_sizes),
             "state_dict": probe.state_dict(),
             "metadata": dict(metadata),
@@ -249,7 +259,25 @@ def load_probe(
     probe = StateProbe(
         artifact["input_dim"],
         history=artifact["history"],
+        stride=artifact.get("stride", 1),
         hidden_sizes=artifact["hidden_sizes"],
     )
     probe.load_state_dict(artifact["state_dict"])
     return probe.to(device).eval(), artifact["metadata"]
+
+
+def check_probe(probe_metadata: Mapping, manifest: Mapping, splits: Mapping) -> None:
+    """Rejects a probe of another encoder or one that saw the test episodes."""
+    params = probe_metadata["params"]
+    for name in ("encoder", "context_frames", "collection_id"):
+        if params[name] != manifest[name]:
+            raise ValueError(
+                f"probe {name} {params[name]!r} does not match the embeddings "
+                f"({manifest[name]!r})"
+            )
+    probe_splits = probe_metadata["episode_splits"]
+    if any(probe_splits[name] != ids.tolist() for name, ids in splits.items()):
+        raise ValueError(
+            "the probe was fitted on another episode split; refit it with the same "
+            "--seed so it never saw the validation and test episodes"
+        )

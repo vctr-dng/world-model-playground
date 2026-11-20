@@ -12,6 +12,8 @@ import numpy as np
 from world_model_playground.wm.data import partition_mask
 
 ROLLOUT_HORIZONS = (1, 10, 25, 50, 100, 200)
+# Observations probes decode well (pose) and poorly (velocities).
+OBSERVATION_GROUPS = {"pose": slice(0, 3), "velocity": slice(3, 5)}
 
 type PredictNext = Callable[[np.ndarray, np.ndarray], np.ndarray]
 # (episode, start step, number of steps) -> predictions for the following steps.
@@ -131,3 +133,15 @@ def persistence_rollout(target: str = "observations") -> EpisodeRollout:
         return np.repeat(episode[target][start][None], num_steps, axis=0)
 
     return rollout
+
+
+def group_rmse(errors: Mapping[str, object], group: str) -> float:
+    """RMSE over the pose (position and angle) or velocity observations.
+
+    Probes decode the pose far better than the velocities, so the overall RMSE
+    of decoded rollouts is dominated by the probe's velocity error.
+    """
+    per_observation = np.asarray(errors["per_observation"])
+    return float(
+        np.sqrt(np.mean(np.square(per_observation[OBSERVATION_GROUPS[group]])))
+    )

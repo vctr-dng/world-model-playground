@@ -11,6 +11,9 @@ horizontal view of the 320x240 camera, and cropping would hide the rail ends.
   in one frame, so probes stack the features of consecutive steps.
 - V-JEPA 2 encodes video clips in tubelets of two frames, so a window of two or
   more frames already carries motion; its pooled feature is the mean token.
+- V-JEPA 2-AC encodes every frame on its own, repeated to fill a tubelet, as its
+  action-conditioned predictor was trained (``wm.ac_checkpoint``); it has one
+  token grid per step and no motion within a step.
 """
 
 from dataclasses import dataclass
@@ -35,6 +38,13 @@ class EncoderSpec:
     checkpoint: str
     input_size: int
     default_context_frames: int
+    # Each frame of a window is repeated this many times before encoding.
+    repeat_frames: int = 1
+    # Weights other than the checkpoint's own, e.g. the V-JEPA 2-AC encoder.
+    weights: str | None = None
+    # Layer-normalize every token (no affine) before pooling, as the targets
+    # of V-JEPA 2-AC's predictor are, so cached tokens are its latent space.
+    layer_norm_tokens: bool = False
 
 
 ENCODERS = {
@@ -46,6 +56,16 @@ ENCODERS = {
         EncoderSpec("vjepa2-vitl", "vjepa2", "facebook/vjepa2-vitl-fpc64-256", 256, 2),
         EncoderSpec("vjepa2-vith", "vjepa2", "facebook/vjepa2-vith-fpc64-256", 256, 2),
         EncoderSpec("vjepa2-vitg", "vjepa2", "facebook/vjepa2-vitg-fpc64-256", 256, 2),
+        EncoderSpec(
+            "vjepa2-ac-vitg",
+            "vjepa2",
+            "facebook/vjepa2-vitg-fpc64-256",
+            256,
+            1,
+            repeat_frames=2,
+            weights="vjepa2-ac",
+            layer_norm_tokens=True,
+        ),
     )
 }
 
@@ -122,15 +142,21 @@ class Dinov2Encoder(FrozenEncoder):
 class VJepa2Encoder(FrozenEncoder):
     def __init__(self, spec: EncoderSpec, backbone: nn.Module, context_frames: int = 2):
         tubelet = backbone.config.tubelet_size
-        if context_frames % tubelet:
+        if context_frames * spec.repeat_frames % tubelet:
             # The tubelet convolution would silently drop the newest frames.
-            raise ValueError(f"V-JEPA 2 context_frames must be a multiple of {tubelet}")
+            raise ValueError(
+                f"V-JEPA 2 context_frames x repeat_frames must be a multiple of {tubelet}"
+            )
         super().__init__(spec, backbone, context_frames)
         self.token_dim = backbone.config.hidden_size
         self.feature_dim = self.token_dim
 
     def _encode(self, pixels: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.spec.repeat_frames > 1:
+            pixels = pixels.repeat_interleave(self.spec.repeat_frames, dim=1)
         tokens = self.backbone(pixel_values_videos=pixels).last_hidden_state
+        if self.spec.layer_norm_tokens:
+            tokens = F.layer_norm(tokens.float(), tokens.shape[-1:]).to(tokens.dtype)
         return tokens.mean(dim=1), tokens
 
 
@@ -158,6 +184,11 @@ def load_encoder(
     if spec.family == "dinov2":
         backbone = Dinov2Model.from_pretrained(spec.checkpoint, dtype=dtype)
         encoder = Dinov2Encoder(spec, backbone, context_frames)
+    elif spec.weights == "vjepa2-ac":
+        from world_model_playground.wm.ac_checkpoint import load_ac_encoder_backbone
+
+        backbone = load_ac_encoder_backbone(dtype=dtype)
+        encoder = VJepa2Encoder(spec, backbone, context_frames)
     else:
         model = VJEPA2Model.from_pretrained(spec.checkpoint, dtype=dtype)
         encoder = VJepa2Encoder(spec, model.encoder, context_frames)
