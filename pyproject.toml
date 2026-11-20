@@ -45,3 +45,8 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/world_model_playground"]
+
+[tool.ruff]
+# Vendored third-party code stays byte-close to upstream.
+extend-exclude = ["src/world_model_playground/wm/vendor"]
+force-exclude = true
