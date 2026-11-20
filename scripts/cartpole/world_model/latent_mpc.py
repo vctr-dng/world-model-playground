@@ -65,9 +65,9 @@ from world_model_playground.wm.planning import (
     linear_dynamics,
     state_evaluator,
 )
-from world_model_playground.wm.predictors import load_predictor
 from world_model_playground.wm.probes import load_probe
 from world_model_playground.wm.runtime import torch_device
+from world_model_playground.wm.world_models import load_world_model
 
 CONTROLLERS = (
     "ppo",
@@ -92,9 +92,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--predictor",
         type=Path,
-        help="latent predictor from train_latent_wm.py (default: "
-        "artifacts/cartpole_world_model/latent_wm/<collection_id>/<embeddings>/"
-        "predictor_h4_r8.pt)",
+        help="latent world model from train_latent_wm.py or train_ac_wm.py "
+        "(default: artifacts/cartpole_world_model/latent_wm/<collection_id>/"
+        "<embeddings>/predictor_h4_r8.pt)",
     )
     parser.add_argument(
         "--probe",
@@ -129,7 +129,15 @@ def parse_args() -> argparse.Namespace:
         "--action-repeat",
         type=positive_int,
         default=2,
-        help="steps each sampled action knot is held for (default: 2)",
+        help="steps each sampled action knot is held for; must equal the "
+        "predictor's step stride when it spans several control steps (default: 2)",
+    )
+    parser.add_argument(
+        "--replan-every",
+        type=positive_int,
+        default=1,
+        help="control steps between plans, for every MPC controller; each plan's "
+        "first actions run in between (default: 1)",
     )
     parser.add_argument("--init-std", type=float, default=0.7)
     parser.add_argument(
@@ -184,33 +192,67 @@ class RandomController:
 
 
 class PlanningController:
-    """Shared CEM bookkeeping: timing and the chosen plan's predicted observations."""
+    """Shared CEM bookkeeping: replanning cadence, timing, and the chosen plan.
 
-    def __init__(self, planner: CEMPlanner):
+    A plan is made every ``replan_every`` control steps and its first
+    ``replan_every`` actions are executed. In between, the plan's info is
+    repeated with ``plan_seconds`` 0, so its mean is the cost per control step.
+    """
+
+    # Control steps between a plan's first and second predicted observations.
+    prediction_stride = 1
+
+    def __init__(self, planner: CEMPlanner, replan_every: int = 1):
+        if planner.config.horizon < replan_every:
+            raise ValueError("the horizon must cover the steps between plans")
         self.planner = planner
+        self.replan_every = replan_every
 
     def reset(self) -> None:
         self.planner.reset()
+        self.step = 0
+        self.queue = None
+        self.plan_info = {}
 
-    def _plan(self, evaluate) -> tuple[np.ndarray, dict]:
-        start = time.perf_counter()
-        plan = self.planner.plan(evaluate)
-        info = {
-            "expected_return": plan.expected_return.cpu().numpy(),
-            "plan_seconds": np.full(
-                self.planner.batch_size, time.perf_counter() - start
-            ),
+    def observe(self, state, observations, qpos, qvel) -> dict:
+        """Per-step bookkeeping before planning; returns per-step info."""
+        return {}
+
+    def evaluator(self, state, observations, qpos, qvel):
+        raise NotImplementedError
+
+    def planned(self, plan) -> None:
+        """Called with every new plan."""
+
+    def act(self, state, observations, qpos, qvel):
+        info = self.observe(state, observations, qpos, qvel)
+        offset = self.step % self.replan_every
+        plan_seconds = 0.0
+        if offset == 0:
+            start = time.perf_counter()
+            plan = self.planner.plan(self.evaluator(state, observations, qpos, qvel))
+            plan_seconds = time.perf_counter() - start
+            self.queue = plan.actions[:, : self.replan_every].cpu().numpy()
+            self.plan_info = {"expected_return": plan.expected_return.cpu().numpy()}
+            if "observations" in plan.extras:
+                self.plan_info["plan_observations"] = (
+                    plan.extras["observations"].cpu().numpy()
+                )
+            self.planned(plan)
+        self.step += 1
+        batch = self.planner.batch_size
+        return self.queue[:, offset], info | self.plan_info | {
+            "plan_seconds": np.full(batch, plan_seconds),
+            "replanned": np.full(batch, offset == 0),
+            "prediction_stride": np.full(batch, self.prediction_stride),
         }
-        if "observations" in plan.extras:
-            info["plan_observations"] = plan.extras["observations"].cpu().numpy()
-        return plan.first_action.cpu().numpy(), info | {"_plan": plan}
 
 
 class TrueDynamicsMPC(PlanningController):
     """CEM through batched MJX rollouts of the real environment."""
 
-    def __init__(self, env, planner: CEMPlanner):
-        super().__init__(planner)
+    def __init__(self, env, planner: CEMPlanner, replan_every: int = 1):
+        super().__init__(planner, replan_every)
         candidates = planner.config.candidates
 
         def rollout(state, actions):
@@ -227,7 +269,7 @@ class TrueDynamicsMPC(PlanningController):
 
         self.rollout = jax.jit(rollout)
 
-    def act(self, state, observations, qpos, qvel):
+    def evaluator(self, state, observations, qpos, qvel):
         device = self.planner.device
 
         def evaluate(actions: torch.Tensor) -> Evaluation:
@@ -244,29 +286,30 @@ class TrueDynamicsMPC(PlanningController):
                 },
             )
 
-        return self._plan(evaluate)
+        return evaluate
 
 
 class StateModelMPC(PlanningController):
     """CEM through an observation-space model rolled out from true observations."""
 
-    def __init__(self, dynamics, planner: CEMPlanner):
-        super().__init__(planner)
+    def __init__(self, dynamics, planner: CEMPlanner, replan_every: int = 1):
+        super().__init__(planner, replan_every)
         self.dynamics = dynamics
 
-    def act(self, state, observations, qpos, qvel):
-        evaluate = state_evaluator(
+    def evaluator(self, state, observations, qpos, qvel):
+        return state_evaluator(
             self.dynamics, to_torch(observations, self.planner.device)
         )
-        return self._plan(evaluate)
 
 
 class LatentMPC(PlanningController):
-    """CEM through the latent predictor from features of the rendered frames.
+    """CEM through a latent world model from the encoded rendered frames.
 
-    The controller keeps each episode's frames, features, and actions, so the
-    encoder window, the predictor context, and the probe history match how the
-    training embeddings were computed (``wm.episodes.step_windows``).
+    Every control step renders and encodes the newest frames, so the encoder
+    window and the probe history match how the training embeddings were
+    computed (``wm.episodes.step_windows``). The model's context holds the
+    latents of its last ``history`` model steps, ``step_stride`` control steps
+    apart, and the grouped actions between them; plans are made at model steps.
     """
 
     def __init__(
@@ -280,8 +323,15 @@ class LatentMPC(PlanningController):
         probe,
         objective: str,
         goal: torch.Tensor | None = None,
+        replan_every: int = 1,
     ):
-        super().__init__(planner)
+        stride = predictor.step_stride
+        if replan_every % stride:
+            raise ValueError("replan_every must be a multiple of the model stride")
+        if stride > 1 and planner.config.action_repeat != stride:
+            raise ValueError("action_repeat must equal the model stride")
+        super().__init__(planner, replan_every)
+        self.prediction_stride = stride
         self.encoder = encoder
         self.renderer = renderer
         self.resolution = resolution
@@ -289,64 +339,91 @@ class LatentMPC(PlanningController):
         self.probe = probe
         self.objective = objective
         self.goal = goal
+        # Control steps of latents, features, and actions the context reaches.
+        self.keep = max(predictor.history, probe.history) * stride + 1
 
     def reset(self) -> None:
         super().reset()
         self.frames = []
+        self.latents = []
         self.features = []
         self.actions = []
         self.predicted_latent = None
+        self.predicted_step = None
 
-    def encode_newest(self, qpos, qvel) -> torch.Tensor:
+    def encode_newest(self, qpos, qvel):
         self.frames.append(self.renderer.render(qpos, qvel, resolution=self.resolution))
         window = step_windows(len(self.frames), self.encoder.context_frames)[-1]
         clips = np.stack([self.frames[i] for i in window], axis=1)  # (B, L, H, W, 3)
+        self.frames = self.frames[-self.encoder.context_frames :]
         return encode_clips(self.encoder, clips)
 
-    @torch.no_grad()
-    def act(self, state, observations, qpos, qvel):
-        device = self.planner.device
-        feature = self.encode_newest(qpos, qvel).to(device)
-        info = {}
-        if self.predicted_latent is not None:
-            # How far the executed action's predicted latent landed from the truth.
-            error = self.predicted_latent - self.predictor.normalize(feature)
-            info["latent_error"] = error.square().mean(-1).sqrt().cpu().numpy()
-        self.features.append(feature)
+    def strided(self, values: list, count: int) -> list:
+        """The last ``count`` entries ``step_stride`` apart, oldest first."""
+        return values[::-1][:: self.predictor.step_stride][:count][::-1]
 
-        history = self.predictor.config.history
-        features = torch.stack(self.features[-history:], dim=1)
-        context_actions = (
-            torch.stack(self.actions[-(features.shape[1] - 1) :], dim=1)
-            if features.shape[1] > 1
-            else features.new_zeros(features.shape[0], 0, 1)
-        )
+    @torch.no_grad()
+    def observe(self, state, observations, qpos, qvel):
+        device = self.planner.device
+        output = self.encode_newest(qpos, qvel)
+        feature = output.pooled.to(device)
+        latent = (
+            output.tokens if self.predictor.latent_kind == "tokens" else output.pooled
+        ).to(device)
+        batch = self.planner.batch_size
+        info = {"latent_error": np.full(batch, np.nan, dtype=np.float32)}
+        if self.predicted_step == self.step:
+            # How far the plan's first predicted latent landed from the truth.
+            error = self.predicted_latent - self.predictor.normalize(latent)
+            info["latent_error"] = (
+                error.square().flatten(1).mean(-1).sqrt().cpu().numpy()
+            )
+        self.latents = [*self.latents, latent][-self.keep :]
+        self.features = [*self.features, feature][-self.keep :]
+
         # The probe stacks earlier true features; the first step repeats itself.
-        past = (
-            torch.stack(self.features[-self.probe.history : -1], dim=1)
-            if len(self.features) > 1
-            else feature[:, None]
-        )
+        stacked = self.strided(self.features, self.probe.history)
+        past = torch.stack(stacked[:-1], 1) if len(stacked) > 1 else feature[:, None]
         decoded = decode_latents(self.probe, past, feature[:, None])[:, 0]
         info["decoded_observations"] = decoded.cpu().numpy()
+        return info
 
-        evaluate = latent_evaluator(
+    def evaluator(self, state, observations, qpos, qvel):
+        stride = self.predictor.step_stride
+        latents = self.strided(self.latents, self.predictor.history)
+        context = torch.stack(latents, dim=1)
+        groups = []
+        for gap in range(len(latents) - 1, 0, -1):
+            # Actions applied from the context step ``gap * stride`` steps back.
+            first = len(self.actions) - gap * stride
+            groups.append(torch.cat(self.actions[first : first + stride], dim=-1))
+        context_actions = (
+            torch.stack(groups, dim=1)
+            if groups
+            else context.new_zeros(context.shape[0], 0, stride)
+        )
+        return latent_evaluator(
             self.predictor,
             self.probe,
-            features,
+            context,
             context_actions,
             objective=self.objective,
             goal=self.goal,
         )
-        action, plan_info = self._plan(evaluate)
-        plan = plan_info.pop("_plan")
+
+    def planned(self, plan) -> None:
         self.predicted_latent = plan.extras["first_latent"]
-        self.actions.append(plan.first_action)
-        return action, info | plan_info
+        self.predicted_step = self.step + self.predictor.step_stride
+
+    def act(self, state, observations, qpos, qvel):
+        action, info = super().act(state, observations, qpos, qvel)
+        action_tensor = to_torch(action, self.planner.device)
+        self.actions = [*self.actions, action_tensor][-self.keep :]
+        return action, info
 
 
-def encode_clips(encoder, clips: np.ndarray) -> torch.Tensor:
-    """Pooled features of uint8 clips ``(B, L, H, W, 3)``.
+def encode_clips(encoder, clips: np.ndarray):
+    """Pooled features and tokens of uint8 clips ``(B, L, H, W, 3)``.
 
     In bfloat16, batches of fewer than about 10 clips run other GPU kernels and
     drift about 1% from the features embed.py cached in batches of 64, so the
@@ -354,14 +431,17 @@ def encode_clips(encoder, clips: np.ndarray) -> torch.Tensor:
     """
     clips = torch.from_numpy(clips).permute(0, 1, 4, 2, 3)
     padded = clips[torch.arange(max(len(clips), MIN_ENCODER_BATCH)) % len(clips)]
-    return encoder(padded).pooled[: len(clips)]
+    output = encoder(padded)
+    return type(output)(output.pooled[: len(clips)], output.tokens[: len(clips)])
 
 
-def encode_goal(encoder, renderer, resolution, device) -> torch.Tensor:
-    """Feature of an upright, centered, still pole: the same frame repeated."""
+def encode_goal(encoder, renderer, resolution, device, latent_kind: str):
+    """Latent of an upright, centered, still pole: the same frame repeated."""
     frame = renderer.render(np.zeros((1, 2)), np.zeros((1, 2)), resolution=resolution)
     clip = np.repeat(frame[None], encoder.context_frames, axis=1)
-    return encode_clips(encoder, clip)[0].to(device)
+    output = encode_clips(encoder, clip)
+    latent = output.tokens if latent_kind == "tokens" else output.pooled
+    return latent[0].to(device)
 
 
 def run_episodes(env, controller, reset_keys, steps: int) -> dict[str, np.ndarray]:
@@ -409,18 +489,23 @@ def summarize(result: dict[str, np.ndarray]) -> dict[str, float]:
         "mean_abs_cart_position": float(np.abs(result["observations"][..., 0]).mean()),
     }
     if "plan_observations" in result:
-        # The plan's first predicted observation against the one actually reached.
-        predicted = result["plan_observations"][:, :, 0]
+        # Each plan's first predicted observation, one model step ahead, against
+        # the one actually reached.
+        stride = int(result["prediction_stride"][0, 0])
+        steps = np.flatnonzero(result["replanned"][0])
+        steps = steps[steps + stride < result["observations"].shape[1]]
+        predicted = result["plan_observations"][:, steps, 0]
         summary["one_step_pose_rmse"] = pose_rmse(
-            predicted, result["observations"][:, 1:]
+            predicted, result["observations"][:, steps + stride]
         )
+        # Per control step (plans are amortized over replan_every steps).
         summary["plan_seconds"] = float(result["plan_seconds"].mean())
     if "decoded_observations" in result:
         summary["probe_pose_rmse"] = pose_rmse(
             result["decoded_observations"], result["observations"][:, :-1]
         )
-    if "latent_error" in result:
-        summary["one_step_latent_rmse"] = float(result["latent_error"].mean())
+    if "latent_error" in result and np.isfinite(result["latent_error"]).any():
+        summary["one_step_latent_rmse"] = float(np.nanmean(result["latent_error"]))
     return summary
 
 
@@ -461,7 +546,7 @@ def main() -> None:
         / args.embeddings_dir.name
         / "predictor_h4_r8.pt"
     )
-    predictor, predictor_metadata = load_predictor(predictor_path, device)
+    predictor, predictor_metadata = load_world_model(predictor_path, device)
     probe_path = args.probe or Path(predictor_metadata["params"]["probe"])
     probe, _ = load_probe(probe_path, device)
     for name in ("encoder", "context_frames", "collection_id"):
@@ -493,6 +578,21 @@ def main() -> None:
     )
     resolution = (manifest["input_size"], manifest["input_size"])
     needs_encoder = any(c.startswith("mpc-latent") for c in args.controllers)
+    stride = predictor.step_stride
+    if (
+        needs_encoder
+        and stride > 1
+        and (
+            args.action_repeat != stride
+            or args.replan_every % stride
+            or args.horizon % stride
+        )
+    ):
+        raise ValueError(
+            f"the predictor steps {stride} control steps at once: use "
+            f"--action-repeat {stride} and multiples of {stride} for --horizon "
+            "and --replan-every"
+        )
     encoder = (
         load_encoder(
             manifest["encoder"],
@@ -531,7 +631,11 @@ def main() -> None:
     with FrameRenderer(
         load_cartpole().mj_model, [resolution], collection["camera"]
     ) as renderer:
-        goal = encode_goal(encoder, renderer, resolution, device) if encoder else None
+        goal = (
+            encode_goal(encoder, renderer, resolution, device, predictor.latent_kind)
+            if encoder
+            else None
+        )
 
         def make_controller(name: str, env):
             def planner(offset: int) -> CEMPlanner:
@@ -540,6 +644,7 @@ def main() -> None:
                     batch_size=args.episodes,
                     device=device,
                     seed=args.seed + offset,
+                    shift=args.replan_every,
                 )
 
             if name == "ppo":
@@ -547,9 +652,13 @@ def main() -> None:
             if name == "random":
                 return RandomController(args.episodes, args.seed)
             if name == "mpc-true":
-                return TrueDynamicsMPC(env, planner(1))
+                return TrueDynamicsMPC(env, planner(1), args.replan_every)
             if name == "mpc-linear":
-                return StateModelMPC(linear_dynamics(linear_model, device), planner(2))
+                return StateModelMPC(
+                    linear_dynamics(linear_model, device),
+                    planner(2),
+                    args.replan_every,
+                )
             return LatentMPC(
                 planner(3 if name == "mpc-latent" else 4),
                 encoder=encoder,
@@ -559,6 +668,7 @@ def main() -> None:
                 probe=probe,
                 objective="reward" if name == "mpc-latent" else "goal",
                 goal=goal,
+                replan_every=args.replan_every,
             )
 
         for reset in args.resets:
@@ -589,7 +699,9 @@ def main() -> None:
             "encoder": manifest["encoder"],
             "context_frames": manifest["context_frames"],
             "predictor": str(predictor_path),
+            "predictor_step_stride": stride,
             "probe": str(probe_path),
+            "replan_every": args.replan_every,
             "episodes": args.episodes,
             "steps": args.steps,
             "seed": args.seed,

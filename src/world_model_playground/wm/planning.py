@@ -10,9 +10,12 @@ sample budget covers.
 
 Evaluators wrap a model and an objective:
 
-- :func:`latent_evaluator` rolls the frozen-encoder latent predictor out from
-  the true recent features and scores either the CartPole reward of the
-  probe-decoded observations or the distance to a goal latent.
+- :func:`latent_evaluator` rolls a latent world model (:class:`LatentWorldModel`:
+  the Phase 3 predictor on pooled features, or V-JEPA 2-AC on patch tokens) out
+  from the true recent latents and scores either the CartPole reward of the
+  probe-decoded observations or the distance to a goal latent. A model step may
+  span several control steps (``step_stride``); plans then hold each knot for
+  exactly one model step (``action_repeat == step_stride``).
 - :func:`state_evaluator` rolls an observation-space model (e.g. the linear
   baseline, see :func:`linear_dynamics`) out from the true observation.
 
@@ -23,12 +26,46 @@ observation and an action, so plans optimize exactly what episodes are scored on
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Protocol
 
 import torch
 
 from world_model_playground.wm.linear import LinearResidualDynamics
-from world_model_playground.wm.predictors import LatentPredictor
 from world_model_playground.wm.probes import StateProbe
+
+
+class LatentWorldModel(Protocol):
+    """What planners and diagnostics need from a latent world model.
+
+    Latents have a per-step shape (``(D,)`` pooled features or ``(N, C)``
+    tokens); ``pooled`` maps them to the per-step features probes decode.
+    Actions are grouped per model step into ``step_stride * A`` values.
+    """
+
+    history: int
+    step_stride: int
+    goal_distance: str  # "l1" or "l2", in normalized latent units
+    latent_kind: str  # "pooled" or "tokens"
+
+    def normalize(self, latents: torch.Tensor) -> torch.Tensor: ...
+
+    def denormalize(self, latents: torch.Tensor) -> torch.Tensor: ...
+
+    def pooled(self, latents: torch.Tensor) -> torch.Tensor: ...
+
+    def rollout_normalized(
+        self,
+        context: torch.Tensor,
+        context_actions: torch.Tensor,
+        actions: torch.Tensor,
+    ) -> torch.Tensor: ...
+
+    def rollout(
+        self,
+        context: torch.Tensor,
+        context_actions: torch.Tensor,
+        actions: torch.Tensor,
+    ) -> torch.Tensor: ...
 
 
 def tolerance(
@@ -131,8 +168,14 @@ class CEMPlanner:
         action_dim: int = 1,
         device: torch.device | str = "cpu",
         seed: int = 0,
+        shift: int = 1,
     ):
+        """``shift`` is the number of control steps between successive plans,
+        by which the warm start is advanced."""
+        if shift < 1:
+            raise ValueError("shift must be at least 1")
         self.config = config
+        self.shift = shift
         self.batch_size = batch_size
         self.action_dim = action_dim
         self.device = torch.device(device)
@@ -182,9 +225,10 @@ class CEMPlanner:
         return plan
 
     def _shifted(self, knots: torch.Tensor) -> torch.Tensor:
-        """Warm start: the plan advanced by one step, repeating its last action."""
+        """Warm start: the plan advanced by ``shift`` steps, repeating its last action."""
         steps = self.expand(knots)
-        steps = torch.cat((steps[:, 1:], steps[:, -1:]), dim=1)
+        shift = min(self.shift, steps.shape[1])
+        steps = torch.cat((steps[:, shift:], steps[:, -1:].expand(-1, shift, -1)), 1)
         return steps[:, :: self.config.action_repeat]
 
 
@@ -207,8 +251,24 @@ def decode_latents(
     return probe(stacked)
 
 
+def group_step_actions(actions: torch.Tensor, stride: int) -> torch.Tensor:
+    """Control-step actions ``(..., H, A)`` -> model-step groups ``(..., H/k, k*A)``."""
+    horizon = actions.shape[-2]
+    if horizon % stride:
+        raise ValueError(f"the horizon must be a multiple of the model stride {stride}")
+    return actions.unflatten(-2, (horizon // stride, stride)).flatten(-2)
+
+
+def latent_distance(
+    difference: torch.Tensor, kind: str, latent_dims: int
+) -> torch.Tensor:
+    """Mean L1 or squared distance over the trailing ``latent_dims`` dimensions."""
+    values = difference.abs() if kind == "l1" else difference.square()
+    return values.flatten(-latent_dims).mean(-1)
+
+
 def latent_evaluator(
-    predictor: LatentPredictor,
+    model: LatentWorldModel,
     probe: StateProbe,
     context: torch.Tensor,
     context_actions: torch.Tensor,
@@ -216,45 +276,63 @@ def latent_evaluator(
     objective: str = "reward",
     goal: torch.Tensor | None = None,
 ) -> Evaluator:
-    """Scores candidates by rolling the latent predictor out from true context.
+    """Scores candidates by rolling the latent model out from true context.
 
-    ``context`` ``(B, L, D)`` holds raw features up to the current step and
-    ``context_actions`` ``(B, L-1, A)`` the actions between them. ``objective``
-    is ``"reward"`` (CartPole reward of the probe-decoded observations) or
-    ``"goal"`` (negative mean squared distance to the raw ``goal`` latent ``(D,)``
-    in normalized units). Extras: decoded ``observations`` ``(B, N, H, 5)`` and
-    the normalized ``first_latent`` ``(B, N, D)``.
+    ``context`` ``(B, L, *latent)`` holds raw latents of the model steps up to
+    the current step and ``context_actions`` ``(B, L-1, k*A)`` the grouped
+    actions between them. Candidate actions ``(B, N, H, A)`` are grouped into
+    ``H / k`` model steps. ``objective`` is ``"reward"`` (CartPole reward of
+    the probe-decoded observations, each model step counting for its ``k``
+    control steps) or ``"goal"`` (negative distance to the raw ``goal`` latent
+    in normalized units, the model's ``goal_distance``, summed over the
+    horizon). Extras: decoded ``observations`` ``(B, N, H/k, 5)`` and the
+    normalized ``first_latent`` ``(B, N, *latent)``.
     """
     if objective not in ("reward", "goal"):
         raise ValueError("objective must be 'reward' or 'goal'")
     if objective == "goal" and goal is None:
         raise ValueError("the goal objective needs a goal latent")
-    normalized_context = predictor.normalize(context)
-    normalized_goal = None if goal is None else predictor.normalize(goal)
+    stride = model.step_stride
+    if probe.stride != stride:
+        raise ValueError("the probe must stack steps model.step_stride apart")
+    latent_dims = context.ndim - 2
+    normalized_context = model.normalize(context)
+    pooled_context = model.pooled(context)
+    normalized_goal = None if goal is None else model.normalize(goal)
 
     @torch.no_grad()
     def evaluate(actions: torch.Tensor) -> Evaluation:
-        batch, candidates, horizon = actions.shape[:3]
+        batch, candidates = actions.shape[:2]
+        flat_actions = actions.flatten(0, 1)
 
         def tile(values: torch.Tensor) -> torch.Tensor:
             return values.repeat_interleave(candidates, dim=0)
 
-        predicted = predictor.rollout_normalized(
-            tile(normalized_context), tile(context_actions), actions.flatten(0, 1)
-        )
+        predicted = model.rollout_normalized(
+            tile(normalized_context),
+            tile(context_actions),
+            group_step_actions(flat_actions, stride),
+        ).float()
         observations = decode_latents(
-            probe, tile(context), predictor.denormalize(predicted)
+            probe,
+            tile(pooled_context),
+            model.pooled(model.denormalize(predicted)),
         )
         if objective == "reward":
-            returns = cartpole_reward(observations, actions.flatten(0, 1)).sum(1)
+            step_actions = flat_actions[:, ::stride]
+            returns = stride * cartpole_reward(observations, step_actions).sum(1)
         else:
-            distance = torch.square(predicted - normalized_goal).mean(-1)
+            distance = latent_distance(
+                predicted - normalized_goal, model.goal_distance, latent_dims
+            )
             returns = -distance.sum(1)
         return Evaluation(
             returns.view(batch, candidates),
             {
-                "observations": observations.view(batch, candidates, horizon, -1),
-                "first_latent": predicted[:, 0].view(batch, candidates, -1),
+                "observations": observations.view(batch, candidates, -1, 5),
+                "first_latent": predicted[:, 0].view(
+                    batch, candidates, *predicted.shape[2:]
+                ),
             },
         )
 
