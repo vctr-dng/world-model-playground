@@ -267,6 +267,27 @@ def latent_distance(
     return values.flatten(-latent_dims).mean(-1)
 
 
+def fit_readout_metric(
+    latents: torch.Tensor, observations: torch.Tensor, *, ridge: float = 1e-2
+) -> torch.Tensor:
+    """A goal metric ``(D, K)``: ridge regression of the standardized state on latents.
+
+    ``latents`` ``(N, D)`` are in the normalized units the planner compares
+    them in and ``observations`` ``(N, K)`` the states they encode. Projecting a
+    latent difference through the result and averaging the squares measures how
+    far apart the *states* are, in units of their spread, instead of weighting
+    every latent direction alike; ``ridge`` is relative to the sample count.
+    """
+    latents = latents.double()
+    targets = observations.double()
+    targets = (targets - targets.mean(0)) / targets.std(0).clamp_min(1e-12)
+    centered = latents - latents.mean(0)
+    gram = centered.T @ centered + ridge * len(latents) * torch.eye(
+        latents.shape[1], dtype=torch.float64, device=latents.device
+    )
+    return torch.linalg.solve(gram, centered.T @ targets).float()
+
+
 def latent_evaluator(
     model: LatentWorldModel,
     probe: StateProbe,
@@ -275,6 +296,8 @@ def latent_evaluator(
     *,
     objective: str = "reward",
     goal: torch.Tensor | None = None,
+    goal_cost: str = "sum",
+    goal_metric: torch.Tensor | None = None,
 ) -> Evaluator:
     """Scores candidates by rolling the latent model out from true context.
 
@@ -285,13 +308,21 @@ def latent_evaluator(
     the probe-decoded observations, each model step counting for its ``k``
     control steps) or ``"goal"`` (negative distance to the raw ``goal`` latent
     in normalized units, the model's ``goal_distance``, summed over the
-    horizon). Extras: decoded ``observations`` ``(B, N, H/k, 5)`` and the
+    horizon, or, with ``goal_cost="final"``, of the last step only, as LeWM
+    plans). With a ``goal_metric`` ``(D, K)`` (see :func:`fit_readout_metric`,
+    pooled latents only) the distance is the mean square of the latent difference
+    projected through it, instead of the model's ``goal_distance``. Extras:
+    decoded ``observations`` ``(B, N, H/k, 5)`` and the
     normalized ``first_latent`` ``(B, N, *latent)``.
     """
     if objective not in ("reward", "goal"):
         raise ValueError("objective must be 'reward' or 'goal'")
     if objective == "goal" and goal is None:
         raise ValueError("the goal objective needs a goal latent")
+    if goal_cost not in ("sum", "final"):
+        raise ValueError("goal_cost must be 'sum' or 'final'")
+    if goal_metric is not None and context.ndim != 3:
+        raise ValueError("a goal metric needs pooled latents (B, L, D)")
     stride = model.step_stride
     if probe.stride != stride:
         raise ValueError("the probe must stack steps model.step_stride apart")
@@ -322,10 +353,14 @@ def latent_evaluator(
             step_actions = flat_actions[:, ::stride]
             returns = stride * cartpole_reward(observations, step_actions).sum(1)
         else:
-            distance = latent_distance(
-                predicted - normalized_goal, model.goal_distance, latent_dims
-            )
-            returns = -distance.sum(1)
+            if goal_metric is None:
+                distance = latent_distance(
+                    predicted - normalized_goal, model.goal_distance, latent_dims
+                )
+            else:
+                projected = (predicted - normalized_goal) @ goal_metric
+                distance = projected.square().mean(-1)
+            returns = -(distance[:, -1] if goal_cost == "final" else distance.sum(1))
         return Evaluation(
             returns.view(batch, candidates),
             {
