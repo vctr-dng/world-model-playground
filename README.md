@@ -7,13 +7,13 @@
 Run a random agent in parallel `CartpoleBalance` environments:
 
 ```bash
-uv run python scripts/cartpole/random_agent.py --num-envs 2048 --num-steps 500 --seed 42
+uv run python scripts/cartpole/expert/random_agent.py --num-envs 2048 --num-steps 500 --seed 42
 ```
 
 Display a specific environment from the parallel batch in a live MuJoCo viewer:
 
 ```bash
-uv run python scripts/cartpole/random_agent.py --render --render-env 12
+uv run python scripts/cartpole/expert/random_agent.py --render --render-env 12
 ```
 
 Select another environment with `--render-env`, which must be smaller than
@@ -29,7 +29,7 @@ checkpoint are logged to MLflow. The tracking URI defaults to
 
 ```bash
 MLFLOW_TRACKING_URI=http://127.0.0.1:5000 \
-  uv run python scripts/cartpole/train_ppo.py
+  uv run python scripts/cartpole/expert/train_ppo.py
 ```
 
 The default MLflow experiment is `cartpole-ppo`; override it with
@@ -38,13 +38,13 @@ The default MLflow experiment is `cartpole-ppo`; override it with
 Render the deterministic policy after training:
 
 ```bash
-uv run python scripts/cartpole/train_ppo.py --render
+uv run python scripts/cartpole/expert/train_ppo.py --render
 ```
 
 For a short pipeline check rather than a converged policy:
 
 ```bash
-uv run python scripts/cartpole/train_ppo.py \
+uv run python scripts/cartpole/expert/train_ppo.py \
   --num-envs 64 --num-timesteps 2048 --num-evals 1 --num-eval-envs 8 \
   --batch-size 64 --num-minibatches 2 --num-updates-per-batch 1 \
   --unroll-length 4 --num-resets-per-eval 0 --max-devices 1
@@ -55,7 +55,7 @@ Every evaluation's checkpoint is logged under `checkpoints/<step>` and the final
 Load a checkpoint for evaluation and live playback (a local checkpoint directory also works):
 
 ```bash
-uv run python scripts/cartpole/train_ppo.py \
+uv run python scripts/cartpole/expert/train_ppo.py \
   --play-only \
   --checkpoint runs:/<run_id>/checkpoint \
   --render
@@ -68,7 +68,7 @@ environments (`--num-envs`) and mix deterministic, stochastic, and uniformly
 random actions (40/30/30 by default) so learned models see off-expert states:
 
 ```bash
-uv run python scripts/cartpole/world_model/collect_obs.py \
+uv run python scripts/cartpole/data/collect_obs.py \
   --num-episodes 500 --episode-length 200 --resolutions 64x64 256x256
 ```
 
@@ -87,7 +87,7 @@ headless EGL (`MUJOCO_GL=egl`), which is much faster than GLFW.
 
 `world_model_playground.wm.episodes` reads and validates shards,
 `wm.datasets.EpisodeClipDataset` serves fixed-length PyTorch clips of frames,
-observations, and actions, and `scripts/cartpole/world_model/visualize_obs.py`
+observations, and actions, and `scripts/cartpole/notebooks/visualize_obs.py`
 browses both episodic and older single-file collections.
 
 #### DreamerV3 export
@@ -98,7 +98,7 @@ in `train`/`validation`/`test` directories using the same episode split as the
 other models:
 
 ```bash
-uv run python scripts/cartpole/world_model/export_dreamer.py \
+uv run python scripts/cartpole/data/export_dreamer.py \
   --collection-dir data/cartpole_trajectories/<collection_id> --resolution 64x64
 ```
 
@@ -115,7 +115,7 @@ window ending at it, stored with the observations and actions under
 `data/embeddings/<collection_id>/<encoder>_ctx<frames>/`:
 
 ```bash
-uv run python scripts/cartpole/world_model/embed.py \
+uv run python scripts/cartpole/data/embed.py \
   --collection-dir data/cartpole_trajectories/<collection_id> --encoder vjepa2-vitl
 ```
 
@@ -130,7 +130,7 @@ Fit linear (ridge) and MLP probes from the stacked features of the last
 on the shared episode split:
 
 ```bash
-uv run python scripts/cartpole/world_model/train_probe.py \
+uv run python scripts/cartpole/train/train_probe.py \
   --embeddings-dir data/embeddings/<collection_id>/dinov2-small_ctx1 \
                    data/embeddings/<collection_id>/vjepa2-vitl_ctx2
 ```
@@ -160,7 +160,7 @@ teacher-forced one-step loss to an open-loop loss over `--rollout-steps`
 predictions fed back as inputs:
 
 ```bash
-uv run python scripts/cartpole/world_model/train_latent_wm.py \
+uv run python scripts/cartpole/train/train_latent_wm.py \
   --embeddings-dir data/embeddings/<collection_id>/vjepa2-vitl_ctx2
 ```
 
@@ -200,9 +200,9 @@ the frames, encodes them with the frozen encoder, plans with CEM through the
 predictor, executes the first action, and replans:
 
 ```bash
-uv run python scripts/cartpole/world_model/latent_mpc.py \
+uv run python scripts/cartpole/control/latent_mpc.py \
   --embeddings-dir data/embeddings/<collection_id>/vjepa2-vitl_ctx2
-uv run marimo edit scripts/cartpole/world_model/latent_mpc_viewer.py
+uv run marimo edit scripts/cartpole/notebooks/latent_mpc_viewer.py
 ```
 
 The same episodes (same reset keys) run under every controller: `ppo`,
@@ -223,7 +223,7 @@ applies constant +1 and -1 forces from test states in MuJoCo and in each model
 and reports the gain, the share of the true response a model predicts:
 
 ```bash
-uv run python scripts/cartpole/world_model/action_response.py \
+uv run python scripts/cartpole/evaluate/action_response.py \
   --embeddings-dir data/embeddings/<collection_id>/vjepa2-vitl_ctx2 --upright-only
 ```
 
@@ -273,7 +273,7 @@ perturbation with 5% chance per step: one uniform random force held for 10 to
 30 steps over the scheduled actions, after which the expert recovers the pole:
 
 ```bash
-uv run python scripts/cartpole/world_model/collect_obs.py \
+uv run python scripts/cartpole/data/collect_obs.py \
   --num-episodes 200 --no-full-circle-reset \
   --deterministic-fraction 0.6 --stochastic-fraction 0.3 --source-hold 10 \
   --perturb-probability 0.05 --perturb-steps 10 30 --resolutions 256x256
@@ -331,22 +331,22 @@ one, and the state token is constant, so the model sees pixels and forces only:
 
 ```bash
 # Tokens of the AC encoder (about 145 MB per 200-step episode)
-uv run python scripts/cartpole/world_model/embed.py \
+uv run python scripts/cartpole/data/embed.py \
   --collection-dir data/cartpole_trajectories/<collection_id> \
   --encoder vjepa2-ac-vitg --store-tokens --batch-size 16
 EMB=data/embeddings/<collection_id>/vjepa2-ac-vitg_ctx1
 # A probe stacking steps one model step apart decodes predicted tokens
-uv run python scripts/cartpole/world_model/train_probe.py \
+uv run python scripts/cartpole/train/train_probe.py \
   --embeddings-dir $EMB --history 2 --history-stride 5
 # Zero-shot, post-trained, and from-scratch predictors
-uv run python scripts/cartpole/world_model/train_ac_wm.py --embeddings-dir $EMB --iterations 0
-uv run python scripts/cartpole/world_model/train_ac_wm.py --embeddings-dir $EMB
-uv run python scripts/cartpole/world_model/train_ac_wm.py --embeddings-dir $EMB --init random
+uv run python scripts/cartpole/train/train_ac_wm.py --embeddings-dir $EMB --iterations 0
+uv run python scripts/cartpole/train/train_ac_wm.py --embeddings-dir $EMB
+uv run python scripts/cartpole/train/train_ac_wm.py --embeddings-dir $EMB --init random
 # Counterfactual response and closed-loop control, planning every model step
 AC=artifacts/cartpole_world_model/ac_wm/<collection_id>/vjepa2-ac-vitg_ctx1/ac_pretrained_k5_h3_r2_i3000.pt
-uv run python scripts/cartpole/world_model/action_response.py \
+uv run python scripts/cartpole/evaluate/action_response.py \
   --embeddings-dir $EMB --predictor $AC --upright-only
-uv run python scripts/cartpole/world_model/latent_mpc.py \
+uv run python scripts/cartpole/control/latent_mpc.py \
   --embeddings-dir $EMB --predictor $AC --resets balance --episodes 5 \
   --candidates 64 --action-repeat 5 --replan-every 5
 ```
@@ -376,23 +376,23 @@ frame skip, 5 control steps per model step, with a history of 3.
 
 ```bash
 # The perturbation recipe above, with 64x64 frames
-uv run python scripts/cartpole/world_model/collect_obs.py \
+uv run python scripts/cartpole/data/collect_obs.py \
   --num-episodes 500 --no-full-circle-reset \
   --deterministic-fraction 0.6 --stochastic-fraction 0.3 --source-hold 10 \
   --perturb-probability 0.05 --perturb-steps 10 30 --resolutions 64x64 256x256
-uv run python scripts/cartpole/world_model/train_lewm.py \
+uv run python scripts/cartpole/train/train_lewm.py \
   --collection-dir data/cartpole_trajectories/<collection_id> --iterations 30000
 # The trained encoder is an embed.py encoder, named by its artifact
 ENC=lewm:$PWD/artifacts/cartpole_world_model/lewm/<collection_id>/<name>.pt
-uv run python scripts/cartpole/world_model/embed.py \
+uv run python scripts/cartpole/data/embed.py \
   --collection-dir data/cartpole_trajectories/<collection_id> --encoder $ENC
 EMB=data/embeddings/<collection_id>/lewm-<name>_ctx1
-uv run python scripts/cartpole/world_model/train_probe.py \
+uv run python scripts/cartpole/train/train_probe.py \
   --embeddings-dir $EMB --history 2 --history-stride 5
-uv run python scripts/cartpole/world_model/eval_lewm.py --embeddings-dir $EMB
-uv run python scripts/cartpole/world_model/action_response.py \
+uv run python scripts/cartpole/evaluate/eval_lewm.py --embeddings-dir $EMB
+uv run python scripts/cartpole/evaluate/action_response.py \
   --embeddings-dir $EMB --predictor <artifact>.pt --upright-only
-uv run python scripts/cartpole/world_model/latent_mpc.py \
+uv run python scripts/cartpole/control/latent_mpc.py \
   --embeddings-dir $EMB --predictor <artifact>.pt --resets balance full-circle \
   --action-repeat 5 --replan-every 5
 ```
@@ -521,11 +521,11 @@ the split is the same) and the model was trained for 10,000 iterations, to compa
 with the 10,000-iteration model on 64x64 frames:
 
 ```bash
-uv run python scripts/cartpole/world_model/collect_obs.py \
+uv run python scripts/cartpole/data/collect_obs.py \
   --num-episodes 500 --no-full-circle-reset \
   --deterministic-fraction 0.6 --stochastic-fraction 0.3 --source-hold 10 \
   --perturb-probability 0.05 --perturb-steps 10 30 --resolutions 224x224
-uv run python scripts/cartpole/world_model/train_lewm.py \
+uv run python scripts/cartpole/train/train_lewm.py \
   --collection-dir data/cartpole_trajectories/<collection_id> \
   --resolution 224 --patch-size 14 --iterations 10000 --gradient-checkpointing
 ```
@@ -566,16 +566,16 @@ cost: attention grows with the square of the tokens per sequence.
 
 ```bash
 E=data/embeddings/perturb200/vjepa2-vitl_ctx2
-uv run python scripts/cartpole/world_model/embed.py \
+uv run python scripts/cartpole/data/embed.py \
   --collection-dir data/cartpole_trajectories/perturb200 --encoder vjepa2-vitl --store-tokens
 # One flat float16 memmap, so training can sample windows across episodes
-uv run python scripts/cartpole/world_model/consolidate_tokens.py --embeddings-dir $E
+uv run python scripts/cartpole/data/consolidate_tokens.py --embeddings-dir $E
 # The probe decodes the grid pooled to --summary-side, stacking steps 5 apart
-uv run python scripts/cartpole/world_model/train_patch_probe.py \
+uv run python scripts/cartpole/train/train_patch_probe.py \
   --embeddings-dir $E --summary-side 2
-uv run python scripts/cartpole/world_model/train_patch_wm.py \
+uv run python scripts/cartpole/train/train_patch_wm.py \
   --embeddings-dir $E --pool-side 8 --summary-side 2 --epochs 30 --steps-per-epoch 300
-uv run python scripts/cartpole/world_model/eval_patch_wm.py \
+uv run python scripts/cartpole/evaluate/eval_patch_wm.py \
   --embeddings-dir $E --predictor artifacts/cartpole_world_model/patch_wm/<collection_id>/<embeddings>/patch_p8_k5_h3_r4.pt
 ```
 
@@ -638,9 +638,9 @@ Fit the linear residual baseline on a collection, then compare it against the
 real environment under MPC:
 
 ```bash
-uv run python scripts/cartpole/world_model/linear_model.py \
+uv run python scripts/cartpole/train/train_linear.py \
   --collection-dir data/cartpole_trajectories/<collection_id>
-uv run marimo edit scripts/cartpole/world_model/mpc_divergence.py
+uv run marimo edit scripts/cartpole/notebooks/mpc_divergence.py
 ```
 
 Reusable code lives in the `world_model_playground` package: `policy` restores
