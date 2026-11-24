@@ -25,8 +25,10 @@ from world_model_playground.wm.embeddings import (
 )
 from world_model_playground.wm.episodes import episode_lengths
 from world_model_playground.wm.eval import (
+    OBSERVATION_GROUPS,
     ROLLOUT_HORIZONS,
     episode_rollout_rmse,
+    group_rmse,
     observation_rollout,
     persistence_rollout,
 )
@@ -39,11 +41,10 @@ from world_model_playground.wm.predictors import (
     normalized_latent_rollout,
     save_predictor,
 )
-from world_model_playground.wm.probes import load_probe
+from world_model_playground.wm.probes import check_probe, load_probe
 from world_model_playground.wm.runtime import torch_device
 
 SPLITS = ("train", "validation", "test")
-OBSERVATION_GROUPS = {"pose": slice(0, 3), "velocity": slice(3, 5)}
 
 
 def non_negative_float(value: str) -> float:
@@ -124,23 +125,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def check_probe(probe_metadata: dict, manifest: dict, splits: dict) -> None:
-    """Rejects a probe of another encoder or one that saw the test episodes."""
-    params = probe_metadata["params"]
-    for name in ("encoder", "context_frames", "collection_id"):
-        if params[name] != manifest[name]:
-            raise ValueError(
-                f"probe {name} {params[name]!r} does not match the embeddings "
-                f"({manifest[name]!r})"
-            )
-    probe_splits = probe_metadata["episode_splits"]
-    if any(probe_splits[name] != ids.tolist() for name, ids in splits.items()):
-        raise ValueError(
-            "the probe was fitted on another episode split; refit it with the same "
-            "--seed so it never saw the validation and test episodes"
-        )
-
-
 def evaluate(episodes, predictor, probe, linear_model, start_every):
     """Decoded-observation and latent rollout RMSE of the model and baselines."""
     for episode in episodes.values():
@@ -177,18 +161,6 @@ def evaluate(episodes, predictor, probe, linear_model, start_every):
             for name, rollout in latent_models.items()
         },
     }
-
-
-def group_rmse(errors: dict, group: str) -> float:
-    """RMSE over the pose (position and angle) or velocity observations.
-
-    Probes decode the pose far better than the velocities, so the overall RMSE
-    of decoded rollouts is dominated by the probe's velocity error.
-    """
-    per_observation = np.asarray(errors["per_observation"])
-    return float(
-        np.sqrt(np.mean(np.square(per_observation[OBSERVATION_GROUPS[group]])))
-    )
 
 
 def flat_metrics(split: str, metrics: dict) -> dict[str, float]:

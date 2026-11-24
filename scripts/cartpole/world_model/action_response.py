@@ -11,6 +11,9 @@ decoded by its probe, and the linear baseline), then compares the response,
 the difference between the two outcomes, for the cart position and the pole
 angle. A gain of 1 means the model moves the system as much as the physics; a
 gain near 0 means the model is blind to the action.
+
+Models whose step spans several control steps (V-JEPA 2-AC) are scored at
+horizons that are multiples of their stride, where their predictions are exact.
 """
 
 import argparse
@@ -29,17 +32,22 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from world_model_playground.cartpole import load_cartpole, positive_int
+from world_model_playground.wm.ac_world_model import group_actions, npz_member_memmap
 from world_model_playground.wm.data import split_episode_ids
 from world_model_playground.wm.embeddings import (
     load_embedded_episodes,
     load_embeddings_manifest,
 )
-from world_model_playground.wm.episodes import episode_lengths, load_episode
+from world_model_playground.wm.episodes import (
+    episode_lengths,
+    episode_path,
+    load_episode,
+)
 from world_model_playground.wm.linear import fit_linear_dynamics
 from world_model_playground.wm.planning import decode_latents, linear_dynamics
-from world_model_playground.wm.predictors import load_predictor
 from world_model_playground.wm.probes import load_probe
 from world_model_playground.wm.runtime import torch_device
+from world_model_playground.wm.world_models import load_world_model
 
 FORCES = (1.0, -1.0)
 
@@ -50,8 +58,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--predictor",
         type=Path,
-        help="latent predictor (default: artifacts/cartpole_world_model/latent_wm/"
-        "<collection_id>/<embeddings>/predictor_h4_r8.pt)",
+        help="latent world model, Phase 3 or V-JEPA 2-AC (default: "
+        "artifacts/cartpole_world_model/latent_wm/<collection_id>/<embeddings>/"
+        "predictor_h4_r8.pt)",
     )
     parser.add_argument(
         "--collection-dir",
@@ -125,8 +134,13 @@ def main() -> None:
         / args.embeddings_dir.name
         / "predictor_h4_r8.pt"
     )
-    predictor, metadata = load_predictor(predictor_path, device)
+    predictor, metadata = load_world_model(predictor_path, device)
     probe, _ = load_probe(Path(metadata["params"]["probe"]), device)
+    stride, history = predictor.step_stride, predictor.history
+    if args.horizon % stride:
+        raise ValueError(f"--horizon must be a multiple of the model stride {stride}")
+    if probe.stride != stride:
+        raise ValueError("the probe must stack steps the model stride apart")
 
     ids = np.fromiter(episode_lengths(manifest), dtype=np.int64)
     train_ids, _, test_ids = split_episode_ids(ids, seed=args.seed)
@@ -145,29 +159,44 @@ def main() -> None:
     test = load_embedded_episodes(
         args.embeddings_dir, test_ids, fields=("features", "observations", "actions")
     )
+    for episode_id, episode in test.items():
+        episode["latents"] = (
+            npz_member_memmap(episode_path(args.embeddings_dir, episode_id), "tokens")
+            if predictor.latent_kind == "tokens"
+            else episode["features"]
+        )
 
     mj_model = load_cartpole().mj_model
     data = mujoco.MjData(mj_model)
-    history = predictor.config.history
     outcomes = {name: [] for name in ("simulator", "latent_model", "linear_model")}
+    held = np.arange(args.horizon) // stride
     for episode_id, episode in test.items():
         physics = load_episode(collection_dir, episode_id, fields=("qpos", "qvel"))
         last_start = len(episode["actions"]) - args.horizon
-        for start in range(history, last_start + 1, args.start_every):
+        for start in range(history * stride, last_start + 1, args.start_every):
             if args.upright_only and episode["observations"][start, 1] <= 0.9:
                 continue
-            first = start - history + 1
-            plans = torch.tensor(FORCES, device=device).view(-1, 1, 1)
-            plans = plans.expand(-1, args.horizon, 1)
+            # Model steps of the context, ``stride`` control steps apart.
+            steps = start - stride * np.arange(history)[::-1]
+            forces = torch.tensor(FORCES, device=device).view(-1, 1, 1)
+            plans = forces.expand(-1, args.horizon // stride, stride)
             context = torch.as_tensor(
-                episode["features"][None, first : start + 1], device=device
-            ).expand(len(FORCES), -1, -1)
+                np.asarray(episode["latents"][steps], dtype=np.float32), device=device
+            )[None]
+            context = context.expand(len(FORCES), *context.shape[1:])
             context_actions = torch.as_tensor(
-                episode["actions"][None, first:start], device=device
-            ).expand(len(FORCES), -1, -1)
+                group_actions(episode["actions"], steps[:-1], stride), device=device
+            )[None].expand(len(FORCES), -1, -1)
+            past_steps = np.maximum(start - stride * np.arange(probe.history)[::-1], 0)
+            past = torch.as_tensor(episode["features"][past_steps], device=device)[
+                None
+            ].expand(len(FORCES), -1, -1)
+            plans = plans.to(torch.float32)
             with torch.no_grad():
-                latents = predictor.rollout(context, context_actions, plans)
-                imagined = decode_latents(probe, context, latents).cpu().numpy()
+                latents = predictor.rollout(context, context_actions, plans).float()
+                pooled = predictor.pooled(predictor.denormalize(latents))
+                imagined = decode_latents(probe, past, pooled).cpu().numpy()[:, held]
+                plans = forces.expand(-1, args.horizon, 1).to(torch.float32)
                 state = torch.as_tensor(
                     episode["observations"][start], device=device
                 ).expand(len(FORCES), -1)
@@ -200,11 +229,14 @@ def main() -> None:
         for name, values in outcomes.items()
     }
     truth = responses["simulator"]
-    horizons = [h for h in (1, 5, 10, 20, 30, 50) if h <= args.horizon]
+    horizons = [
+        h for h in (1, 5, 10, 20, 30, 50) if h <= args.horizon and h % stride == 0
+    ]
     report = {
         "params": {
             "embeddings_dir": str(args.embeddings_dir.resolve()),
             "predictor": str(predictor_path),
+            "predictor_step_stride": stride,
             "horizon": args.horizon,
             "start_every": args.start_every,
             "upright_only": args.upright_only,

@@ -176,15 +176,16 @@ def episodes_to_transitions(
     }
 
 
-def step_windows(num_steps: int, context: int) -> np.ndarray:
+def step_windows(num_steps: int, context: int, stride: int = 1) -> np.ndarray:
     """Indices ``(num_steps, context)`` of the steps ending at each step.
 
-    Row ``t`` is ``t-context+1 .. t``; steps before the episode start repeat
-    step 0, so every step of an episode, including the first, gets a window.
+    Row ``t`` is ``t-(context-1)*stride, ..., t-stride, t``; steps before the
+    episode start repeat step 0, so every step of an episode, including the
+    first, gets a window.
     """
-    if num_steps < 1 or context < 1:
-        raise ValueError("num_steps and context must be at least 1")
-    offsets = np.arange(1 - context, 1)
+    if num_steps < 1 or context < 1 or stride < 1:
+        raise ValueError("num_steps, context, and stride must be at least 1")
+    offsets = np.arange(1 - context, 1) * stride
     return np.maximum(np.arange(num_steps)[:, None] + offsets, 0)
 
 

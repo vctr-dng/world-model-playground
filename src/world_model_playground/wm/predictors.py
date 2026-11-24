@@ -39,7 +39,15 @@ class PredictorConfig:
 
 
 class LatentPredictor(nn.Module):
-    """Causal transformer from latent and action histories to next latents."""
+    """Causal transformer from latent and action histories to next latents.
+
+    Implements the latent world-model interface of ``wm.planning``: one model
+    step per control step, latents are pooled features ``(..., D)``.
+    """
+
+    step_stride = 1
+    goal_distance = "l2"
+    latent_kind = "pooled"
 
     def __init__(self, config: PredictorConfig):
         super().__init__()
@@ -74,6 +82,15 @@ class LatentPredictor(nn.Module):
             nn.Transformer.generate_square_subsequent_mask(config.history),
             persistent=False,
         )
+
+    @property
+    def history(self) -> int:
+        return self.config.history
+
+    @staticmethod
+    def pooled(latents: torch.Tensor) -> torch.Tensor:
+        """Latents are already one pooled feature per step."""
+        return latents
 
     def set_normalization(self, features: np.ndarray) -> None:
         stats = fit_normalization(features)
@@ -311,7 +328,7 @@ def evaluate_losses(
 
 def decode_steps(probe: StateProbe, features: np.ndarray, steps: slice) -> np.ndarray:
     """Probe observations at ``steps`` of a feature sequence, stacking its history."""
-    windows = step_windows(len(features), probe.history)[steps]
+    windows = step_windows(len(features), probe.history, probe.stride)[steps]
     return probe.predict(features[windows].reshape(len(windows), -1))
 
 
