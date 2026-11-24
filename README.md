@@ -512,10 +512,47 @@ What the experiments show:
   Weights from 0.02 to 0.3 behave alike; the paper reports the same
   insensitivity on Push-T for 0.01 to 0.2.
 
-The Level 1 results above come from other collections, so they are context and
-not a controlled comparison; running `embed.py --encoder vjepa2-vitl` and
-`train_latent_wm.py` on this collection gives one. Frames of 224x224, as in the
-paper, were not tried.
+##### Frames of 224x224
+
+LeWM trains on 224x224 frames with 14x14 patches. To match what the controller
+renders, the same 500 episodes were collected again at that size (same seed and
+policy: all 500 episodes have identical states, actions, and action sources, so
+the split is the same) and the model was trained for 10,000 iterations, to compare
+with the 10,000-iteration model on 64x64 frames:
+
+```bash
+uv run python scripts/cartpole/world_model/collect_obs.py \
+  --num-episodes 500 --no-full-circle-reset \
+  --deterministic-fraction 0.6 --stochastic-fraction 0.3 --source-hold 10 \
+  --perturb-probability 0.05 --perturb-steps 10 30 --resolutions 224x224
+uv run python scripts/cartpole/world_model/train_lewm.py \
+  --collection-dir data/cartpole_trajectories/<collection_id> \
+  --resolution 224 --patch-size 14 --iterations 10000 --gradient-checkpointing
+```
+
+The frames of 400 training episodes take 12 GB of memory. One seed each:
+
+| | 64x64 | 224x224 |
+| --- | --- | --- |
+| training time, 10,000 iterations | 1,236 s | 6,095 s |
+| peak GPU memory, batch 128 | 3.7 GB | 3.0 GB with checkpointing (not measured without) |
+| MLP probe R², cart vel / ang vel | 0.967 / 0.995 | 0.975 / 0.997 |
+| pose RMSE at 5 / 25 / 100 steps | 0.022 / 0.084 / 0.334 | 0.021 / 0.077 / 0.295 |
+| velocity RMSE at 5 / 25 / 100 steps | 0.357 / 0.547 / 1.334 | 0.380 / 0.480 / 1.162 |
+| action response at 30 steps, cart / pole angle | 1.03 / 1.00 | 1.02 / 0.97 |
+| balance return, probe-decoded reward | 183.4 ± 5.1 | 190.8 ± 4.4 |
+| balance return, Euclidean goal | 98.0 ± 10.0 | 116.2 ± 8.6 |
+| balance return, read-out goal, last step | 163.2 ± 9.3 (30,000 iterations) | 159.2 ± 10.9 |
+| full-circle return, probe-decoded reward | 37.4 ± 8.4 | 27.0 ± 5.7 |
+| planning s/step (10 episodes) | 0.208 | 0.229 |
+
+At 5 times the training cost, larger frames improve the rollouts by 7 to 13% from
+25 steps on and leave the closed-loop results within their standard errors, so
+on CartPole 64x64 frames are the better trade (with one seed each, the rollout
+gain itself is also near the noise). The Level 1 results above come from
+other collections, so they are context and not a controlled comparison; running
+`embed.py --encoder vjepa2-vitl` and `train_latent_wm.py` on this collection gives
+one.
 
 #### Linear Model
 
