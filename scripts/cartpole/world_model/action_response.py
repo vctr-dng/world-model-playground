@@ -188,9 +188,14 @@ def main() -> None:
                 group_actions(episode["actions"], steps[:-1], stride), device=device
             )[None].expand(len(FORCES), -1, -1)
             past_steps = np.maximum(start - stride * np.arange(probe.history)[::-1], 0)
-            past = torch.as_tensor(episode["features"][past_steps], device=device)[
-                None
-            ].expand(len(FORCES), -1, -1)
+            # The probe reads what the model's ``pooled`` returns for true latents.
+            past = torch.as_tensor(
+                np.asarray(episode["latents"][past_steps], dtype=np.float32),
+                device=device,
+            )[None]
+            if predictor.latent_kind == "tokens":
+                past = predictor.pooled(past)
+            past = past.expand(len(FORCES), -1, -1)
             plans = plans.to(torch.float32)
             with torch.no_grad():
                 latents = predictor.rollout(context, context_actions, plans).float()
