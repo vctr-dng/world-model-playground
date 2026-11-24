@@ -1,27 +1,15 @@
-"""Tests for the replanning cadence and strided context of latent_mpc.py controllers."""
-
-import importlib.util
-from pathlib import Path
+"""Tests for the replanning cadence and strided context of the MPC controllers."""
 
 import numpy as np
 import pytest
 import torch
 
-from world_model_playground.wm import ac_world_model
+from world_model_playground.wm import ac_world_model, control
 from world_model_playground.wm.encoders import EncoderOutput
 from world_model_playground.wm.planning import CEMConfig, CEMPlanner
 from world_model_playground.wm.probes import StateProbe
 
-SCRIPT = Path(__file__).parents[1] / "scripts/cartpole/world_model/latent_mpc.py"
 TOKENS, CHANNELS = 4, 16
-
-
-@pytest.fixture(scope="module")
-def latent_mpc():
-    spec = importlib.util.spec_from_file_location("latent_mpc", SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 class StubRenderer:
@@ -69,23 +57,21 @@ def tiny_model():
     return ac_world_model.build_ac_model(config).eval()
 
 
-def test_latent_mpc_plans_every_model_step_from_strided_context(
-    latent_mpc, monkeypatch
-):
+def test_latent_mpc_plans_every_model_step_from_strided_context(monkeypatch):
     model = tiny_model()
     torch.manual_seed(3)
     probe = StateProbe(2 * CHANNELS, history=2, stride=2).eval()
     encoder = StubEncoder()
     calls = []
-    real_evaluator = latent_mpc.latent_evaluator
+    real_evaluator = control.latent_evaluator
 
     def recording_evaluator(predictor, probe, context, context_actions, **kwargs):
         calls.append((context.clone(), context_actions.clone()))
         return real_evaluator(predictor, probe, context, context_actions, **kwargs)
 
-    monkeypatch.setattr(latent_mpc, "latent_evaluator", recording_evaluator)
+    monkeypatch.setattr(control, "latent_evaluator", recording_evaluator)
     config = CEMConfig(horizon=4, candidates=4, iterations=1, elites=2, action_repeat=2)
-    controller = latent_mpc.LatentMPC(
+    controller = control.LatentMPC(
         CEMPlanner(config, batch_size=2, shift=2, seed=0),
         encoder=encoder,
         renderer=StubRenderer(),
@@ -130,10 +116,10 @@ def test_latent_mpc_plans_every_model_step_from_strided_context(
     assert calls[0][1].shape == (2, 0, 2)  # no earlier steps at the first plan
 
 
-def test_latent_mpc_rejects_a_cadence_off_the_model_stride(latent_mpc):
+def test_latent_mpc_rejects_a_cadence_off_the_model_stride():
     config = CEMConfig(horizon=4, candidates=4, iterations=1, elites=2, action_repeat=2)
     with pytest.raises(ValueError, match="multiple of the model stride"):
-        latent_mpc.LatentMPC(
+        control.LatentMPC(
             CEMPlanner(config, batch_size=1),
             encoder=StubEncoder(),
             renderer=StubRenderer(),
@@ -145,7 +131,7 @@ def test_latent_mpc_rejects_a_cadence_off_the_model_stride(latent_mpc):
         )
 
 
-def test_summarize_scores_one_model_step_at_replanning_steps(latent_mpc):
+def test_summarize_scores_one_model_step_at_replanning_steps():
     steps = 6
     observations = np.zeros((1, steps + 1, 5))
     observations[0, :, 0] = np.arange(steps + 1)
@@ -162,7 +148,7 @@ def test_summarize_scores_one_model_step_at_replanning_steps(latent_mpc):
         "plan_seconds": np.array([[0.4, 0, 0.4, 0, 0.4, 0]]),
         "latent_error": np.array([[np.nan, np.nan, 0.5, np.nan, 0.7, np.nan]]),
     }
-    summary = latent_mpc.summarize(result)
+    summary = control.summarize(result)
     assert summary["one_step_pose_rmse"] == 0.0
     assert summary["plan_seconds"] == pytest.approx(0.2)
     assert summary["one_step_latent_rmse"] == pytest.approx(0.6)
