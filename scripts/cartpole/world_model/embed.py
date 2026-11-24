@@ -42,6 +42,20 @@ from world_model_playground.wm.episodes import (
 )
 
 
+def encoder_choice(value: str) -> str:
+    """A registered encoder name, or ``lewm:<artifact>`` made absolute."""
+    if value.startswith("lewm:"):
+        path = Path(value.removeprefix("lewm:"))
+        if not path.is_file():
+            raise argparse.ArgumentTypeError(f"no LeWM artifact at {path}")
+        return f"lewm:{path.resolve()}"
+    if value not in ENCODERS:
+        raise argparse.ArgumentTypeError(
+            f"unknown encoder {value!r}; choose from {sorted(ENCODERS)} or lewm:<path>"
+        )
+    return value
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -50,7 +64,12 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="episodic collection written by collect_obs.py",
     )
-    parser.add_argument("--encoder", choices=sorted(ENCODERS), required=True)
+    parser.add_argument(
+        "--encoder",
+        type=encoder_choice,
+        required=True,
+        help="a registered encoder or lewm:<path to a train_lewm.py artifact>",
+    )
     parser.add_argument(
         "--context-frames",
         type=positive_int,
