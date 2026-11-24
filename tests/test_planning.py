@@ -204,3 +204,58 @@ def test_state_evaluator_prefers_the_action_toward_upright():
 def test_cem_config_rejects_invalid_settings(bad):
     with pytest.raises(ValueError):
         planning.CEMConfig(**bad)
+
+
+def test_readout_metric_recovers_the_state_directions():
+    generator = torch.Generator().manual_seed(0)
+    state = torch.randn(2000, 3, generator=generator)
+    mixing = torch.randn(3, 16, generator=generator)
+    # The state occupies three directions of the latent, buried in noise.
+    latents = state @ mixing + torch.randn(2000, 16, generator=generator)
+
+    metric = planning.fit_readout_metric(latents, state)
+
+    assert metric.shape == (16, 3)
+    projected = (latents - latents.mean(0)) @ metric
+    corr = torch.corrcoef(torch.cat((projected, state), dim=1).T)[:3, 3:]
+    assert corr.diagonal().abs().min() > 0.9
+
+
+def test_readout_goal_metric_ignores_directions_that_do_not_carry_the_state():
+    torch.manual_seed(0)
+    config = PredictorConfig(feature_dim=8, history=3, width=16, depth=1, heads=2)
+    predictor = LatentPredictor(config).eval()
+    probe = make_probe(feature_dim=8, history=2)
+    context = torch.randn(2, 2, 8)
+    # The episodes differ only in the last four latent directions.
+    context[1, :, :4] = context[0, :, :4]
+    actions = torch.rand(2, 5, 4, 1) * 2 - 1
+    metric = torch.zeros(8, 5)
+    metric[:4] = torch.randn(4, 5)
+
+    def goal_returns(**kwargs):
+        evaluate = planning.latent_evaluator(
+            predictor,
+            probe,
+            context,
+            torch.zeros(2, 1, 1),
+            objective="goal",
+            goal=context[0, -1],
+            **kwargs,
+        )
+        return evaluate(actions).returns
+
+    # Persistence predictions keep episode 1 where it is: the same state as the
+    # goal for the read-out, but not for the Euclidean distance.
+    torch.testing.assert_close(goal_returns(goal_metric=metric), torch.zeros(2, 5))
+    assert (goal_returns()[1] < 0).all()
+    with pytest.raises(ValueError, match="pooled"):
+        planning.latent_evaluator(
+            predictor,
+            probe,
+            torch.randn(2, 2, 3, 8),
+            torch.zeros(2, 1, 1),
+            objective="goal",
+            goal=torch.zeros(3, 8),
+            goal_metric=metric,
+        )
