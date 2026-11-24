@@ -14,6 +14,8 @@ horizontal view of the 320x240 camera, and cropping would hide the rail ends.
 - V-JEPA 2-AC encodes every frame on its own, repeated to fill a tubelet, as its
   action-conditioned predictor was trained (``wm.ac_checkpoint``); it has one
   token grid per step and no motion within a step.
+- A LeWM encoder trained on CartPole (``wm.lewm``) is named ``lewm:<artifact>``;
+  it embeds every frame on its own into a single vector.
 """
 
 from dataclasses import dataclass
@@ -34,7 +36,7 @@ class EncoderSpec:
     """A pretrained checkpoint and how frames must be fed to it."""
 
     name: str
-    family: Literal["dinov2", "vjepa2"]
+    family: Literal["dinov2", "vjepa2", "lewm"]
     checkpoint: str
     input_size: int
     default_context_frames: int
@@ -174,6 +176,13 @@ def load_encoder(
     """
     from transformers import Dinov2Model, VJEPA2Model
 
+    if name.startswith("lewm:"):
+        # A LeWM encoder trained here, named by its artifact (wm.lewm.encoder_name).
+        from world_model_playground.wm.lewm import load_lewm_encoder
+
+        return load_lewm_encoder(
+            name, torch_device(None if device is None else str(device)), dtype
+        )
     if name not in ENCODERS:
         raise ValueError(f"unknown encoder {name!r}; choose from {sorted(ENCODERS)}")
     spec = ENCODERS[name]

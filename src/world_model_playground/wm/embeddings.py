@@ -32,12 +32,18 @@ MANIFEST_NAME = "embeddings.json"
 COPIED_FIELDS = ("observations", "actions", "rewards", "terminated", "truncated")
 
 
+def encoder_slug(encoder_name: str) -> str:
+    """``encoder_name`` as a directory name; ``lewm:<path>`` becomes ``lewm-<stem>``."""
+    if encoder_name.startswith("lewm:"):
+        return f"lewm-{Path(encoder_name.removeprefix('lewm:')).stem}"
+    return encoder_name
+
+
 def default_embeddings_dir(
     collection_id: str, encoder_name: str, context_frames: int
 ) -> Path:
-    return (
-        Path("data/embeddings") / collection_id / f"{encoder_name}_ctx{context_frames}"
-    )
+    slug = encoder_slug(encoder_name)
+    return Path("data/embeddings") / collection_id / f"{slug}_ctx{context_frames}"
 
 
 def embed_frames(
