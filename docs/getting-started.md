@@ -18,8 +18,8 @@ uv sync
 ## MLflow
 
 PPO checkpoints, training runs and evaluation results live in MLflow. Start the
-server (data goes to `docker/mlflow-data`, the port and bind address come from
-`docker/.env`):
+server (data goes to `docker/mlflow-data`; the first run creates `docker/.env`
+from `docker/.env.example`, where you can change the port and bind address):
 
 ```bash
 ./docker/up.sh
