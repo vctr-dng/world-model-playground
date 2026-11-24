@@ -141,6 +141,12 @@ def parse_args() -> argparse.Namespace:
         help="control steps between plans, for every MPC controller; each plan's "
         "first actions run in between (default: 1)",
     )
+    parser.add_argument(
+        "--rollout-chunk",
+        type=positive_int,
+        help="candidate sequences rolled out at once, to bound GPU memory for "
+        "token models at many episodes x candidates; same results (default: all)",
+    )
     parser.add_argument("--init-std", type=float, default=0.7)
     parser.add_argument(
         "--goal-metric",
@@ -344,6 +350,7 @@ class LatentMPC(PlanningController):
         goal_cost: str = "sum",
         goal_metric: torch.Tensor | None = None,
         replan_every: int = 1,
+        rollout_chunk: int | None = None,
     ):
         stride = predictor.step_stride
         if replan_every % stride:
@@ -361,6 +368,7 @@ class LatentMPC(PlanningController):
         self.goal = goal
         self.goal_cost = goal_cost
         self.goal_metric = goal_metric
+        self.rollout_chunk = rollout_chunk
         # Control steps of latents, features, and actions the context reaches.
         self.keep = max(predictor.history, probe.history) * stride + 1
 
@@ -439,6 +447,7 @@ class LatentMPC(PlanningController):
             goal=self.goal,
             goal_cost=self.goal_cost,
             goal_metric=self.goal_metric,
+            rollout_chunk=self.rollout_chunk,
         )
 
     def planned(self, plan) -> None:
@@ -716,6 +725,7 @@ def main() -> None:
                 goal_cost=args.goal_cost,
                 goal_metric=goal_metric,
                 replan_every=args.replan_every,
+                rollout_chunk=args.rollout_chunk,
             )
 
         for reset in args.resets:

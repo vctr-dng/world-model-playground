@@ -347,6 +347,32 @@ def test_latent_evaluator_scores_token_models_per_model_step(objective):
         latent_evaluator(model, tiny_probe(stride=1), context, torch.randn(2, 1, 2))
 
 
+@pytest.mark.parametrize("objective", ["reward", "goal"])
+@pytest.mark.parametrize("chunk", [1, 4, 5, 100])
+def test_latent_evaluator_chunks_rollouts_without_changing_results(objective, chunk):
+    model = tiny_model(step_stride=2, history=2)
+    context = random_latents(3, 2)
+    context_actions = torch.randn(3, 1, 2)
+    goal = random_latents(1, 1, seed=9)[0, 0]
+    actions = torch.rand(3, 4, 6, 1) * 2 - 1
+
+    def evaluate(rollout_chunk):
+        return latent_evaluator(
+            model,
+            tiny_probe(stride=2),
+            context,
+            context_actions,
+            objective=objective,
+            goal=goal,
+            rollout_chunk=rollout_chunk,
+        )(actions)
+
+    whole, chunked = evaluate(None), evaluate(chunk)
+    torch.testing.assert_close(chunked.returns, whole.returns)
+    for name in whole.extras:
+        torch.testing.assert_close(chunked.extras[name], whole.extras[name])
+
+
 def test_cem_warm_start_advances_by_the_replanning_shift():
     config = CEMConfig(horizon=6, candidates=8, iterations=1, elites=2, action_repeat=2)
     planner = CEMPlanner(config, batch_size=1, shift=2, seed=0)
