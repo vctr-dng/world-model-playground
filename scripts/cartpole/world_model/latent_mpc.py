@@ -48,6 +48,7 @@ from world_model_playground.wm.data import split_episode_ids
 from world_model_playground.wm.embeddings import (
     load_embedded_episodes,
     load_embeddings_manifest,
+    source_resolution,
 )
 from world_model_playground.wm.encoders import load_encoder
 from world_model_playground.wm.episodes import (
@@ -617,7 +618,10 @@ def main() -> None:
         action_repeat=args.action_repeat,
         init_std=args.init_std,
     )
-    resolution = (manifest["input_size"], manifest["input_size"])
+    # Render as embed.py read frames: collected frames resized by the encoder,
+    # not frames rendered directly at the encoder's input size.
+    size = manifest["input_size"]
+    resolution = source_resolution(collection, size) or (size, size)
     needs_encoder = any(c.startswith("mpc-latent") for c in args.controllers)
     stride = predictor.step_stride
     if (

@@ -46,6 +46,22 @@ def default_embeddings_dir(
     return Path("data/embeddings") / collection_id / f"{slug}_ctx{context_frames}"
 
 
+def source_resolution(manifest: Mapping, size: int) -> tuple[int, int] | None:
+    """Smallest square collected resolution of at least ``size``, if any.
+
+    Embeddings are made from these frames, resized to the encoder's input size,
+    so closed-loop control must render the same way: frames rendered directly
+    at ``size`` differ in the pixels (about 15% in DINOv2 features) and a probe
+    fitted on the resized ones reads them several times worse.
+    """
+    squares = sorted(
+        entry["height"]
+        for entry in manifest["resolutions"]
+        if entry["height"] == entry["width"] and entry["height"] >= size
+    )
+    return (squares[0], squares[0]) if squares else None
+
+
 def embed_frames(
     encoder: FrozenEncoder,
     frames: np.ndarray,

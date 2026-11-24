@@ -121,3 +121,19 @@ def test_embedded_episodes_round_trip(tmp_path):
     assert embeddings.load_embeddings_manifest(tmp_path)["format_version"] == 1
     with pytest.raises(ValueError, match="one row per step"):
         embeddings.write_embedded_episode(tmp_path, 8, episode, features[:3])
+
+
+def test_source_resolution_picks_the_smallest_square_at_least_the_input_size():
+    manifest = {
+        "resolutions": [
+            {"height": 64, "width": 64},
+            {"height": 256, "width": 256},
+            {"height": 240, "width": 320},
+            {"height": 512, "width": 512},
+        ]
+    }
+    # A 224px encoder reads the 256px frames resized, never a direct 224 render.
+    assert embeddings.source_resolution(manifest, 224) == (256, 256)
+    assert embeddings.source_resolution(manifest, 256) == (256, 256)
+    assert embeddings.source_resolution(manifest, 300) == (512, 512)
+    assert embeddings.source_resolution(manifest, 600) is None
