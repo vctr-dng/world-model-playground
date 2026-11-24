@@ -43,8 +43,14 @@ from world_model_playground.wm.predictors import (
 )
 from world_model_playground.wm.probes import check_probe, load_probe
 from world_model_playground.wm.runtime import torch_device
+from world_model_playground.wm.tracking import flat_rollout_metrics, tracked_run
 
 SPLITS = ("train", "validation", "test")
+
+LATENT = {
+    "latent_key": "normalized_latent_rollout_rmse",
+    "latent_label": "latent",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -156,33 +162,16 @@ def evaluate(episodes, predictor, probe, linear_model, start_every):
     }
 
 
-def flat_metrics(split: str, metrics: dict) -> dict[str, float]:
-    flat = {}
-    for model, horizons in metrics["observation_rollout_rmse"].items():
-        for horizon, errors in horizons.items():
-            flat[f"{split}_{model}_rmse_h{horizon}"] = errors["overall"]
-            for group in OBSERVATION_GROUPS:
-                flat[f"{split}_{model}_{group}_rmse_h{horizon}"] = group_rmse(
-                    errors, group
-                )
-    for model, horizons in metrics["normalized_latent_rollout_rmse"].items():
-        for horizon, error in horizons.items():
-            flat[f"{split}_{model}_latent_rmse_h{horizon}"] = error
-    return flat
-
-
 def log_to_mlflow(experiment: str, run_name: str, record: dict, path: Path) -> None:
-    import mlflow
-
-    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-    mlflow.set_experiment(experiment)
-    with mlflow.start_run(run_name=run_name, tags={"stage": "latent_dynamics"}):
+    with tracked_run(experiment, run_name, "latent_dynamics") as mlflow:
         mlflow.log_params(record["params"])
         for epoch, losses in enumerate(record["training"]["losses"], start=1):
             mlflow.log_metrics(losses, step=epoch)
         mlflow.log_metrics(
-            flat_metrics("validation", record["metrics"]["validation"])
-            | flat_metrics("test", record["metrics"]["test"])
+            flat_rollout_metrics(
+                "validation", record["metrics"]["validation"], **LATENT
+            )
+            | flat_rollout_metrics("test", record["metrics"]["test"], **LATENT)
         )
         mlflow.log_dict(record, "latent_wm.json")
         mlflow.log_artifact(str(path), artifact_path="latent_wm")

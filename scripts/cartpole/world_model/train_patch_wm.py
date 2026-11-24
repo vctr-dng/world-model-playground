@@ -35,6 +35,7 @@ from world_model_playground.wm.patch_predictor import (
 from world_model_playground.wm.probes import check_probe, load_probe
 from world_model_playground.wm.runtime import torch_device
 from world_model_playground.wm.token_cache import open_token_store
+from world_model_playground.wm.tracking import tracked_run
 
 SPLITS = ("train", "validation", "test")
 # Pooled tokens of a split stay on the GPU below this size, else in host memory.
@@ -138,11 +139,7 @@ def storage_device(choice: str, device: torch.device, gigabytes: float):
 
 
 def log_to_mlflow(experiment: str, run_name: str, record: dict, path: Path) -> None:
-    import mlflow
-
-    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-    mlflow.set_experiment(experiment)
-    with mlflow.start_run(run_name=run_name, tags={"stage": "patch_dynamics"}):
+    with tracked_run(experiment, run_name, "patch_dynamics") as mlflow:
         mlflow.log_params(record["params"])
         for epoch, losses in enumerate(record["training"]["losses"], start=1):
             mlflow.log_metrics(losses, step=epoch)

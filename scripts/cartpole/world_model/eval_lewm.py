@@ -28,21 +28,20 @@ from world_model_playground.wm.embeddings import (
     load_embeddings_manifest,
 )
 from world_model_playground.wm.episodes import episode_lengths
-from world_model_playground.wm.eval import (
-    OBSERVATION_GROUPS,
-    ROLLOUT_HORIZONS,
-    episode_rollout_rmse,
-    group_rmse,
-    observation_rollout,
-    persistence_rollout,
-)
+from world_model_playground.wm.eval import OBSERVATION_GROUPS, group_rmse
 from world_model_playground.wm.lewm import ENCODER_PREFIX, lewm_rollouts, load_lewm
 from world_model_playground.wm.linear import fit_linear_dynamics
-from world_model_playground.wm.predictors import decode_steps
 from world_model_playground.wm.probes import check_probe, load_probe
+from world_model_playground.wm.rollout_eval import (
+    evaluate_rollouts,
+    evaluation_horizons,
+)
 from world_model_playground.wm.runtime import torch_device
+from world_model_playground.wm.tracking import flat_rollout_metrics, tracked_run
 
 SPLITS = ("train", "validation", "test")
+
+LATENT_KEY = "latent_rollout_rmse"
 
 
 def parse_args() -> argparse.Namespace:
@@ -82,64 +81,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--device", help="torch device (default: cuda if available)")
     return parser.parse_args()
-
-
-def evaluation_horizons(stride: int) -> tuple[int, ...]:
-    """Rollout horizons where a model stepping ``stride`` control steps is exact."""
-    return tuple(h for h in (stride, *ROLLOUT_HORIZONS) if h % stride == 0)
-
-
-def evaluate(episodes, model, probe, linear_model, start_every, horizons):
-    """Decoded-observation and embedding rollout RMSE of the model and baselines."""
-    observations, latents = lewm_rollouts(model, probe)
-
-    def true_features(episode, start, num_steps):
-        steps = slice(start + 1, start + 1 + num_steps)
-        return decode_steps(probe, episode["features"], steps)
-
-    observation_models = {
-        "lewm": observations,
-        "linear_model": observation_rollout(linear_model.predict_next),
-        "probe_on_true_features": true_features,
-        "persistence": persistence_rollout(),
-    }
-    latent_models = {"lewm": latents, "persistence": persistence_rollout("features")}
-    return {
-        "observation_rollout_rmse": {
-            name: episode_rollout_rmse(
-                rollout, episodes, horizons=horizons, start_every=start_every
-            )
-            for name, rollout in observation_models.items()
-        },
-        "latent_rollout_rmse": {
-            name: {
-                horizon: errors["overall"]
-                for horizon, errors in episode_rollout_rmse(
-                    rollout,
-                    episodes,
-                    target="features",
-                    horizons=horizons,
-                    start_every=start_every,
-                ).items()
-            }
-            for name, rollout in latent_models.items()
-        },
-    }
-
-
-def flat_metrics(split: str, metrics: dict) -> dict[str, float]:
-    flat = {}
-    for model, horizons in metrics["observation_rollout_rmse"].items():
-        for horizon, errors in horizons.items():
-            flat[f"{split}_{model}_rmse_h{horizon}"] = errors["overall"]
-            for group in OBSERVATION_GROUPS:
-                flat[f"{split}_{model}_{group}_rmse_h{horizon}"] = group_rmse(
-                    errors, group
-                )
-    for model, horizons in metrics["latent_rollout_rmse"].items():
-        for horizon, error in horizons.items():
-            flat[f"{split}_{model}_latent_rmse_h{horizon}"] = error
-    return flat
 
 
 def record_probe(model_path: Path, probe_path: Path) -> None:
@@ -195,8 +136,15 @@ def main() -> None:
             splits[split],
             fields=("features", "observations", "actions"),
         )
-        metrics[split] = evaluate(
-            episodes, model, probe, linear_model, args.start_every, horizons
+        metrics[split] = evaluate_rollouts(
+            episodes,
+            label="lewm",
+            rollouts=lewm_rollouts(model, probe),
+            probe=probe,
+            linear_model=linear_model,
+            start_every=args.start_every,
+            horizons=horizons,
+            latent_key=LATENT_KEY,
         )
 
     record_probe(model_path, probe_path)
@@ -212,13 +160,9 @@ def main() -> None:
     eval_path = model_path.with_suffix(".eval.json")
     eval_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     if os.environ.get("MLFLOW_TRACKING_URI"):
-        import mlflow
-
-        mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-        mlflow.set_experiment(args.mlflow_experiment)
-        with mlflow.start_run(
-            run_name=f"{model_path.stem}_eval", tags={"stage": "lewm_eval"}
-        ):
+        with tracked_run(
+            args.mlflow_experiment, f"{model_path.stem}_eval", "lewm_eval"
+        ) as mlflow:
             mlflow.log_params(
                 {
                     "model": model_path.name,
@@ -241,8 +185,18 @@ def main() -> None:
                 }
             )
             mlflow.log_metrics(
-                flat_metrics("validation", metrics["validation"])
-                | flat_metrics("test", metrics["test"])
+                flat_rollout_metrics(
+                    "validation",
+                    metrics["validation"],
+                    latent_key=LATENT_KEY,
+                    latent_label="latent",
+                )
+                | flat_rollout_metrics(
+                    "test",
+                    metrics["test"],
+                    latent_key=LATENT_KEY,
+                    latent_label="latent",
+                )
             )
             mlflow.log_dict(record, "lewm_eval.json")
     print(f"Saved {eval_path}; probe recorded in {model_path}")

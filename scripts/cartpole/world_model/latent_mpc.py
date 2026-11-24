@@ -70,6 +70,7 @@ from world_model_playground.wm.planning import (
 )
 from world_model_playground.wm.probes import load_probe
 from world_model_playground.wm.runtime import torch_device
+from world_model_playground.wm.tracking import tracked_run
 from world_model_playground.wm.world_models import load_world_model
 
 CONTROLLERS = (
@@ -813,12 +814,8 @@ def write_markdown(summary: dict, path: Path) -> None:
 
 
 def log_to_mlflow(experiment: str, record: dict, output_dir: Path) -> None:
-    import mlflow
-
-    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-    mlflow.set_experiment(experiment)
     name = f"{record['params']['encoder']}_ctx{record['params']['context_frames']}"
-    with mlflow.start_run(run_name=f"{name}-latent-mpc", tags={"stage": "latent_mpc"}):
+    with tracked_run(experiment, f"{name}-latent-mpc", "latent_mpc") as mlflow:
         mlflow.log_params(
             {k: v for k, v in record["params"].items() if not isinstance(v, list)}
         )
