@@ -61,6 +61,7 @@ from world_model_playground.wm.planning import (
     CEMPlanner,
     Evaluation,
     decode_latents,
+    fit_readout_metric,
     latent_evaluator,
     linear_dynamics,
     state_evaluator,
@@ -140,6 +141,22 @@ def parse_args() -> argparse.Namespace:
         "first actions run in between (default: 1)",
     )
     parser.add_argument("--init-std", type=float, default=0.7)
+    parser.add_argument(
+        "--goal-metric",
+        choices=("euclidean", "readout"),
+        default="euclidean",
+        help="how mpc-latent-goal measures the distance between latents: the "
+        "model's own norm (default) or the squared distance after a ridge "
+        "read-out of the standardized state fitted on the training embeddings "
+        "(pooled latents only)",
+    )
+    parser.add_argument(
+        "--goal-cost",
+        choices=("sum", "final"),
+        default="sum",
+        help="mpc-latent-goal scores the goal distance summed over the horizon "
+        "(default) or at its last step only, as LeWM plans",
+    )
     parser.add_argument(
         "--split-seed",
         type=int,
@@ -323,6 +340,8 @@ class LatentMPC(PlanningController):
         probe,
         objective: str,
         goal: torch.Tensor | None = None,
+        goal_cost: str = "sum",
+        goal_metric: torch.Tensor | None = None,
         replan_every: int = 1,
     ):
         stride = predictor.step_stride
@@ -339,6 +358,8 @@ class LatentMPC(PlanningController):
         self.probe = probe
         self.objective = objective
         self.goal = goal
+        self.goal_cost = goal_cost
+        self.goal_metric = goal_metric
         # Control steps of latents, features, and actions the context reaches.
         self.keep = max(predictor.history, probe.history) * stride + 1
 
@@ -409,6 +430,8 @@ class LatentMPC(PlanningController):
             context_actions,
             objective=self.objective,
             goal=self.goal,
+            goal_cost=self.goal_cost,
+            goal_metric=self.goal_metric,
         )
 
     def planned(self, plan) -> None:
@@ -559,8 +582,20 @@ def main() -> None:
     if train_ids.tolist() != predictor_metadata["episode_splits"]["train"]:
         raise ValueError("--split-seed does not reproduce the predictor's split")
     train = load_embedded_episodes(
-        args.embeddings_dir, train_ids, fields=("observations", "actions")
+        args.embeddings_dir, train_ids, fields=("features", "observations", "actions")
     )
+    goal_metric = None
+    if args.goal_metric == "readout":
+        if predictor.latent_kind != "pooled":
+            raise ValueError("--goal-metric readout needs a pooled-latent model")
+        goal_metric = fit_readout_metric(
+            predictor.normalize(
+                torch.as_tensor(np.concatenate([e["features"] for e in train.values()]))
+            ),
+            torch.as_tensor(
+                np.concatenate([e["observations"] for e in train.values()])
+            ),
+        ).to(device)
     linear_model = fit_linear_dynamics(
         np.concatenate([e["observations"][:-1] for e in train.values()]),
         np.concatenate([e["actions"] for e in train.values()]),
@@ -668,6 +703,8 @@ def main() -> None:
                 probe=probe,
                 objective="reward" if name == "mpc-latent" else "goal",
                 goal=goal,
+                goal_cost=args.goal_cost,
+                goal_metric=goal_metric,
                 replan_every=args.replan_every,
             )
 
@@ -707,6 +744,8 @@ def main() -> None:
             "seed": args.seed,
             "controllers": args.controllers,
             "resets": args.resets,
+            "goal_cost": args.goal_cost,
+            "goal_metric": args.goal_metric,
             **{f"cem_{k}": v for k, v in vars(cem).items()},
         },
         "summary": summary,
