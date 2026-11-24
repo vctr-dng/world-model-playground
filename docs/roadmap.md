@@ -22,20 +22,19 @@ points from the papers and do not compare with the results here.
 
 ## Summary
 
-| Level | What you do | Time (rough) | Resume value |
-|---|---|---|---|
-| 0 | Run a pretrained world model as a black box | 1–2 evenings | Low (smoke test) |
-| 1 | Frozen pretrained encoder + trained predictor (DINO-WM style) | Days to a week | Good |
-| 2 | Train a JEPA end-to-end from pixels (LeWM style) | About a week | Good |
-| 3 | Compare Levels 1 and 2, add an encoder ablation | 1–2 weeks on top | High |
-| 4 | Add your own research contribution | 2–4 weeks, risk of negative result | Highest |
-| 5 | Other families (generative, Dreamer-style, large-scale pretraining) | n/a | Understanding only |
+| Level | What you do | Time (rough) |
+|---|---|---|
+| 0 | Run a pretrained world model as a black box | 1–2 evenings |
+| 1 | Frozen pretrained encoder + trained predictor (DINO-WM style) | Days to a week |
+| 2 | Train a JEPA end-to-end from pixels (LeWM style) | About a week |
+| 3 | Compare Levels 1 and 2, add an encoder ablation | 1–2 weeks on top |
+| 4 | Add your own research contribution | 2–4 weeks, risk of negative result |
+| 5 | Other families (generative, Dreamer-style, large-scale pretraining) | n/a |
 
 ## Level 0: Use a pretrained world model as a black box
 
 - **What:** Load a released checkpoint (e.g. `quentinll/lewm-pusht`) and run planning in an environment.
 - **Skills shown:** Setup, evaluation, reading the literature.
-- **Resume value:** Low on its own. Treat it as a smoke test for your setup.
 
 ## Level 1: Frozen pretrained encoder, train only the dynamics (DINO-WM style)
 
@@ -43,20 +42,17 @@ points from the papers and do not compare with the results here.
 - **Skills shown:** Working with foundation models, latent-space dynamics, planning.
 - **Cost:** Cheap in trainable parameters (DINO-WM's predictor is about 19M). Patch features are too large to cache for the full Push-T set (my estimate is roughly 500 GB), so run the frozen encoder on the fly or cache a subset.
 - **Note:** Use patch tokens, not CLS. In the DINO-WM paper, patch features reach 96% on Wall against 58% for CLS.
-- **Resume value:** Good. This is the "experience with pre-trained models" part.
 
 ## Level 2: Train a JEPA end-to-end from pixels (LeWM style)
 
 - **What:** Train the encoder and predictor together, using a prediction loss plus the SIGReg regularizer to prevent collapse.
 - **Skills shown:** Self-supervised learning, representation collapse, regularization.
 - **Cost:** About 15M parameters (ViT-tiny encoder about 5M, predictor about 10M). The paper reports a few hours on one GPU, an L40S with 48 GB. I haven't tested whether it fits in 8 GB; a smaller batch or gradient accumulation may be needed.
-- **Resume value:** Good, and it pairs well with Level 1 as a comparison.
 
 ## Level 3: Compare and analyze
 
 - **What:** Put Levels 1 and 2 side by side on accuracy, planning time, VRAM, training time and failure cases. Add V-JEPA 2 ViT-L as a third encoder (patch tokens) and run an ablation.
 - **Skills shown:** Experimental design, ablations, honest reporting of trade-offs.
-- **Resume value:** High. This is the first level where you have your own results and conclusions.
 
 ## Level 4: Add a research contribution
 
@@ -67,7 +63,6 @@ Pick one question and answer it with experiments. Candidates:
 - The counterfactual correction from *Counterfactual World Models* (2611.24778), applied to Push-T.
 
 **Skills shown:** Research taste, extending published work.
-**Resume value:** Highest, even with a negative result, as long as you analyze why.
 **Caveat:** I have only read the abstracts of the adaptation and planner-failure papers, so their reproducibility is unchecked.
 
 ## Level 5: Other families of world models
