@@ -275,6 +275,7 @@ def latent_evaluator(
     *,
     objective: str = "reward",
     goal: torch.Tensor | None = None,
+    goal_cost: str = "sum",
 ) -> Evaluator:
     """Scores candidates by rolling the latent model out from true context.
 
@@ -285,13 +286,16 @@ def latent_evaluator(
     the probe-decoded observations, each model step counting for its ``k``
     control steps) or ``"goal"`` (negative distance to the raw ``goal`` latent
     in normalized units, the model's ``goal_distance``, summed over the
-    horizon). Extras: decoded ``observations`` ``(B, N, H/k, 5)`` and the
+    horizon, or, with ``goal_cost="final"``, of the last step only, as LeWM
+    plans). Extras: decoded ``observations`` ``(B, N, H/k, 5)`` and the
     normalized ``first_latent`` ``(B, N, *latent)``.
     """
     if objective not in ("reward", "goal"):
         raise ValueError("objective must be 'reward' or 'goal'")
     if objective == "goal" and goal is None:
         raise ValueError("the goal objective needs a goal latent")
+    if goal_cost not in ("sum", "final"):
+        raise ValueError("goal_cost must be 'sum' or 'final'")
     stride = model.step_stride
     if probe.stride != stride:
         raise ValueError("the probe must stack steps model.step_stride apart")
@@ -325,7 +329,7 @@ def latent_evaluator(
             distance = latent_distance(
                 predicted - normalized_goal, model.goal_distance, latent_dims
             )
-            returns = -distance.sum(1)
+            returns = -(distance[:, -1] if goal_cost == "final" else distance.sum(1))
         return Evaluation(
             returns.view(batch, candidates),
             {

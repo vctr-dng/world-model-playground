@@ -141,6 +141,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--init-std", type=float, default=0.7)
     parser.add_argument(
+        "--goal-cost",
+        choices=("sum", "final"),
+        default="sum",
+        help="mpc-latent-goal scores the goal distance summed over the horizon "
+        "(default) or at its last step only, as LeWM plans",
+    )
+    parser.add_argument(
         "--split-seed",
         type=int,
         default=0,
@@ -323,6 +330,7 @@ class LatentMPC(PlanningController):
         probe,
         objective: str,
         goal: torch.Tensor | None = None,
+        goal_cost: str = "sum",
         replan_every: int = 1,
     ):
         stride = predictor.step_stride
@@ -339,6 +347,7 @@ class LatentMPC(PlanningController):
         self.probe = probe
         self.objective = objective
         self.goal = goal
+        self.goal_cost = goal_cost
         # Control steps of latents, features, and actions the context reaches.
         self.keep = max(predictor.history, probe.history) * stride + 1
 
@@ -409,6 +418,7 @@ class LatentMPC(PlanningController):
             context_actions,
             objective=self.objective,
             goal=self.goal,
+            goal_cost=self.goal_cost,
         )
 
     def planned(self, plan) -> None:
@@ -668,6 +678,7 @@ def main() -> None:
                 probe=probe,
                 objective="reward" if name == "mpc-latent" else "goal",
                 goal=goal,
+                goal_cost=args.goal_cost,
                 replan_every=args.replan_every,
             )
 
@@ -707,6 +718,7 @@ def main() -> None:
             "seed": args.seed,
             "controllers": args.controllers,
             "resets": args.resets,
+            "goal_cost": args.goal_cost,
             **{f"cem_{k}": v for k, v in vars(cem).items()},
         },
         "summary": summary,

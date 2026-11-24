@@ -124,6 +124,33 @@ def test_latent_evaluator_scores_reward_and_goal_objectives():
     assert ((reward.returns >= 0) & (reward.returns <= 4)).all()
 
 
+def test_final_goal_cost_scores_the_last_step_only():
+    torch.manual_seed(0)
+    config = PredictorConfig(feature_dim=8, history=3, width=16, depth=1, heads=2)
+    predictor = LatentPredictor(config).eval()
+    probe = make_probe(feature_dim=8, history=2)
+    context = torch.randn(2, 2, 8)
+    actions = torch.rand(2, 5, 4, 1) * 2 - 1
+
+    def goal_returns(**kwargs):
+        evaluate = planning.latent_evaluator(
+            predictor,
+            probe,
+            context,
+            torch.zeros(2, 1, 1),
+            objective="goal",
+            goal=context[0, -1],
+            **kwargs,
+        )
+        return evaluate(actions).returns
+
+    # Persistence keeps every step of the 4-step horizon equally far from the
+    # goal, so the summed cost is four times the last step's.
+    torch.testing.assert_close(goal_returns(), 4 * goal_returns(goal_cost="final"))
+    with pytest.raises(ValueError, match="goal_cost"):
+        goal_returns(goal_cost="mean")
+
+
 def test_linear_dynamics_matches_the_numpy_model():
     rng = np.random.default_rng(0)
     observations = rng.normal(size=(200, 5))
