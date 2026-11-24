@@ -20,11 +20,8 @@ from world_model_playground.wm.runtime import share_gpu_with_jax
 # Re-rendering loads the MJX environment, so JAX must not reserve the GPU first.
 share_gpu_with_jax()
 
-from world_model_playground.cartpole import (
-    FrameRenderer,
-    load_cartpole,
-    positive_int,
-)
+from world_model_playground.cartpole import FrameRenderer, load_cartpole
+from world_model_playground.cli import positive_int
 from world_model_playground.wm.embeddings import (
     COPIED_FIELDS,
     default_embeddings_dir,

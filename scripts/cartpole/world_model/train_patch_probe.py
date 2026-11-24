@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from world_model_playground.cartpole import positive_int
+from world_model_playground.cli import positive_int
 from world_model_playground.wm.data import OBSERVATION_NAMES, split_episode_ids
 from world_model_playground.wm.embeddings import load_embeddings_manifest
 from world_model_playground.wm.episodes import episode_lengths

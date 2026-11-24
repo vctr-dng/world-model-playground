@@ -16,11 +16,8 @@ os.environ.setdefault("MUJOCO_GL", "egl")
 
 import numpy as np
 
-from world_model_playground.cartpole import (
-    FrameRenderer,
-    load_cartpole,
-    parse_resolution,
-)
+from world_model_playground.cartpole import FrameRenderer, load_cartpole
+from world_model_playground.cli import parse_resolution
 from world_model_playground.wm.data import split_episode_ids
 from world_model_playground.wm.dreamer import ACTION_ALIGNMENTS, to_dreamer_episode
 from world_model_playground.wm.episodes import (

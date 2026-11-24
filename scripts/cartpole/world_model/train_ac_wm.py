@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from world_model_playground.cartpole import positive_int
+from world_model_playground.cli import non_negative_int, positive_int
 from world_model_playground.wm.ac_checkpoint import load_checkpoint
 from world_model_playground.wm.ac_world_model import (
     ACConfig,
@@ -57,13 +57,6 @@ from world_model_playground.wm.probes import check_probe, load_probe
 from world_model_playground.wm.runtime import torch_device
 
 SPLITS = ("train", "validation", "test")
-
-
-def non_negative_int(value: str) -> int:
-    parsed = int(value)
-    if parsed < 0:
-        raise argparse.ArgumentTypeError("must be at least 0")
-    return parsed
 
 
 def parse_args() -> argparse.Namespace:

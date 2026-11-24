@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from world_model_playground.cartpole import positive_int
+from world_model_playground.cli import non_negative_float, positive_int
 from world_model_playground.wm.data import split_episode_ids
 from world_model_playground.wm.embeddings import (
     load_embedded_episodes,
@@ -45,13 +45,6 @@ from world_model_playground.wm.probes import check_probe, load_probe
 from world_model_playground.wm.runtime import torch_device
 
 SPLITS = ("train", "validation", "test")
-
-
-def non_negative_float(value: str) -> float:
-    parsed = float(value)
-    if parsed < 0.0:
-        raise argparse.ArgumentTypeError("must be at least 0")
-    return parsed
 
 
 def parse_args() -> argparse.Namespace:

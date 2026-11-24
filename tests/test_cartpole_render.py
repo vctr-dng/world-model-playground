@@ -1,6 +1,5 @@
 """Tests for rendering CartPole physics states at arbitrary resolutions."""
 
-import argparse
 import os
 
 os.environ.setdefault("MUJOCO_GL", "egl")
@@ -9,14 +8,6 @@ import numpy as np
 import pytest
 
 from world_model_playground import cartpole
-
-
-def test_parse_resolution_accepts_square_and_rectangular_sizes():
-    assert cartpole.parse_resolution("64") == (64, 64)
-    assert cartpole.parse_resolution("240x320") == (240, 320)
-    for invalid in ("0x64", "64x", "a", "1x2x3"):
-        with pytest.raises(argparse.ArgumentTypeError):
-            cartpole.parse_resolution(invalid)
 
 
 def test_matched_fovy_keeps_the_reference_horizontal_view():

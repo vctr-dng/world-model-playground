@@ -22,12 +22,8 @@ import jax.numpy as jnp
 import mlflow
 import numpy as np
 
-from world_model_playground.cartpole import (
-    FrameRenderer,
-    load_cartpole,
-    parse_resolution,
-    positive_int,
-)
+from world_model_playground.cartpole import FrameRenderer, load_cartpole
+from world_model_playground.cli import fraction, parse_resolution, positive_int
 from world_model_playground.policy import (
     load_policy,
     select_best_checkpoint,
@@ -48,14 +44,6 @@ from world_model_playground.wm.episodes import (
 _ACTION_SOURCES = ("deterministic", "stochastic", "random", "perturbation")
 _PERTURBATION = _ACTION_SOURCES.index("perturbation")
 _MAX_EPISODE_LENGTH = 1000  # CartpoleBalance's own time limit
-
-
-def fraction(value: str) -> float:
-    """Parses a fraction in the inclusive range [0, 1]."""
-    parsed = float(value)
-    if not 0.0 <= parsed <= 1.0:
-        raise argparse.ArgumentTypeError("must be between 0 and 1")
-    return parsed
 
 
 def episode_length(value: str) -> int:

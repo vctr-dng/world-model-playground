@@ -1,6 +1,5 @@
 """Shared CartpoleBalance environment and visualization helpers."""
 
-import argparse
 import time
 from collections.abc import Callable, Sequence
 from typing import Any, Self
@@ -15,20 +14,6 @@ from mujoco_playground._src.mjx_env import MjxEnv
 
 # Frame size whose horizontal camera view every rendered resolution reproduces.
 REFERENCE_HEIGHT, REFERENCE_WIDTH = 240, 320
-
-
-def positive_int(value: str) -> int:
-    parsed = int(value)
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("must be at least 1")
-    return parsed
-
-
-def non_negative_int(value: str) -> int:
-    parsed = int(value)
-    if parsed < 0:
-        raise argparse.ArgumentTypeError("must be at least 0")
-    return parsed
 
 
 def load_cartpole(*, full_circle_reset: bool = False) -> MjxEnv:
@@ -54,19 +39,6 @@ def load_cartpole(*, full_circle_reset: bool = False) -> MjxEnv:
         env._reset_randomize = reset_full_circle  # pyright: ignore[reportPrivateUsage]
 
     return env
-
-
-def parse_resolution(value: str) -> tuple[int, int]:
-    """Parses ``HEIGHTxWIDTH`` (or a single side for square frames) into a size."""
-    try:
-        sides = tuple(int(side) for side in value.lower().split("x"))
-    except ValueError as error:
-        raise argparse.ArgumentTypeError("must look like 64x64 or 64") from error
-    if len(sides) == 1:
-        sides = sides * 2
-    if len(sides) != 2 or min(sides) < 1:
-        raise argparse.ArgumentTypeError("must look like 64x64 or 64")
-    return sides
 
 
 def matched_fovy(fovy: float, height: int, width: int) -> float:

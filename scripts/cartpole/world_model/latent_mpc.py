@@ -43,7 +43,8 @@ import torch
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from world_model_playground.cartpole import FrameRenderer, load_cartpole, positive_int
+from world_model_playground.cartpole import FrameRenderer, load_cartpole
+from world_model_playground.cli import positive_int
 from world_model_playground.wm.data import split_episode_ids
 from world_model_playground.wm.embeddings import (
     load_embedded_episodes,

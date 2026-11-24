@@ -20,11 +20,8 @@ from brax.training.agents.ppo import train as ppo
 from mujoco_playground import wrapper
 from mujoco_playground.config import dm_control_suite_params
 
-from world_model_playground.cartpole import (
-    load_cartpole,
-    positive_int,
-    run_live_rollout,
-)
+from world_model_playground.cartpole import load_cartpole, run_live_rollout
+from world_model_playground.cli import positive_int
 from world_model_playground.policy import (
     fetch_checkpoint,
     load_policy,

@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from world_model_playground.cartpole import non_negative_int, positive_int
+from world_model_playground.cli import non_negative_int, positive_int
 from world_model_playground.wm.data import split_episode_ids
 from world_model_playground.wm.episodes import (
     episode_lengths,

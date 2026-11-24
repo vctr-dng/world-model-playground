@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from world_model_playground.cli import positive_float
 from world_model_playground.wm.data import (
     OBSERVATION_NAMES,
     load_transitions,
@@ -13,14 +14,6 @@ from world_model_playground.wm.data import (
 )
 from world_model_playground.wm.eval import evaluate_partition
 from world_model_playground.wm.linear import fit_linear_dynamics, save_linear_model
-
-
-def positive_float(value: str) -> float:
-    """Parse a strictly positive floating-point value."""
-    parsed = float(value)
-    if parsed <= 0.0:
-        raise argparse.ArgumentTypeError("must be greater than zero")
-    return parsed
 
 
 def parse_args() -> argparse.Namespace:

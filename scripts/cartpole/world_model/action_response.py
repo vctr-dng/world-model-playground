@@ -31,7 +31,8 @@ import torch
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from world_model_playground.cartpole import load_cartpole, positive_int
+from world_model_playground.cartpole import load_cartpole
+from world_model_playground.cli import positive_int
 from world_model_playground.wm.ac_world_model import group_actions, npz_member_memmap
 from world_model_playground.wm.data import split_episode_ids
 from world_model_playground.wm.embeddings import (
