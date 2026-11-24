@@ -387,10 +387,16 @@ class LatentMPC(PlanningController):
     def observe(self, state, observations, qpos, qvel):
         device = self.planner.device
         output = self.encode_newest(qpos, qvel)
-        feature = output.pooled.to(device)
         latent = (
             output.tokens if self.predictor.latent_kind == "tokens" else output.pooled
         ).to(device)
+        # The probe reads what the model's ``pooled`` returns: the encoder's own
+        # pooled feature, or for token models their (spatial) summary.
+        feature = (
+            self.predictor.pooled(latent)
+            if self.predictor.latent_kind == "tokens"
+            else output.pooled.to(device)
+        )
         batch = self.planner.batch_size
         info = {"latent_error": np.full(batch, np.nan, dtype=np.float32)}
         if self.predicted_step == self.step:
