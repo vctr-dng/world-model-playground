@@ -60,11 +60,12 @@ Other settings that matter on small or shared cards:
 
 ```bash
 uv run pytest
+python scripts/check_docs.py   # links, anchors and script paths in these pages
 ```
 
 The suite includes a JAX/PyTorch GPU-sharing check when a GPU is present.
 [pre-commit](https://pre-commit.com) runs ruff and keeps `uv.lock` in sync:
-`pre-commit install`.
+`pre-commit install`. CI runs ruff and the docs check.
 
 ## Where the code lives
 
