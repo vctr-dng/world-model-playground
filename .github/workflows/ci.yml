@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Same ruff version as .pre-commit-config.yaml.
+      - run: pipx run ruff==0.17.6 check .
+      - run: pipx run ruff==0.17.6 format --check .
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check_docs.py

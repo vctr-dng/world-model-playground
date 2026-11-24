@@ -511,7 +511,10 @@ def check_chaining(episode_ids, images, mo, next_images, np, transitions):
         dtype=bool,
         count=len(_sample),
     )
-    _ok = lambda _flag: "✅" if _flag else "❌"
+
+    def _ok(_flag):
+        return "✅" if _flag else "❌"
+
     mo.md(f"""
     | check | result | |
     |---|---|---|

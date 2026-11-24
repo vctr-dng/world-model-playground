@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from world_model_playground.cartpole import positive_int
+from world_model_playground.cli import positive_int
 from world_model_playground.wm.data import OBSERVATION_NAMES, split_episode_ids
 from world_model_playground.wm.embeddings import (
     load_embedded_episodes,
@@ -33,6 +33,7 @@ from world_model_playground.wm.probes import (
     save_probe,
 )
 from world_model_playground.wm.runtime import torch_device
+from world_model_playground.wm.tracking import flat_probe_metrics, tracked_run
 
 PROBES = ("linear", "mlp")
 
@@ -94,24 +95,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def flat_metrics(prefix: str, metrics: dict) -> dict[str, float]:
-    flat = {f"{prefix}_angle_mae_rad": metrics["angle_mae_rad"]}
-    flat[f"{prefix}_rmse"] = metrics["rmse"]["overall"]
-    for name, value in metrics["r2"].items():
-        flat[f"{prefix}_r2_{name}"] = value
-    return flat
-
-
 def log_to_mlflow(experiment: str, run_name: str, record: dict, path: Path) -> None:
-    import mlflow
-
-    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-    mlflow.set_experiment(experiment)
-    with mlflow.start_run(run_name=run_name, tags={"stage": "state_probe"}):
+    with tracked_run(experiment, run_name, "state_probe") as mlflow:
         mlflow.log_params(record["params"])
         mlflow.log_metrics(
-            flat_metrics("validation", record["metrics"]["validation"])
-            | flat_metrics("test", record["metrics"]["test"])
+            flat_probe_metrics("validation", record["metrics"]["validation"])
+            | flat_probe_metrics("test", record["metrics"]["test"])
         )
         mlflow.log_dict(record, "probe.json")
         mlflow.log_artifact(str(path), artifact_path="probe")

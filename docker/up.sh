@@ -8,6 +8,11 @@ HOST_UID="$(id -u)"
 HOST_GID="$(id -g)"
 ENV_FILE=".env"
 
+if [[ ! -f "$ENV_FILE" && -f ".env.example" ]]; then
+  cp .env.example "$ENV_FILE"
+  echo "[INFO] Created $ENV_FILE from .env.example"
+fi
+
 if [[ -f "$ENV_FILE" ]]; then
   # Update existing keys or append if missing.
   if grep -q '^HOST_UID=' "$ENV_FILE"; then
@@ -21,7 +26,7 @@ if [[ -f "$ENV_FILE" ]]; then
     printf 'HOST_GID=%s\n' "$HOST_GID" >>"$ENV_FILE"
   fi
 else
-  echo "[WARNING] .env file not found, please create it manually."
+  echo "[WARNING] .env and .env.example not found, please create .env manually."
 fi
 
 mkdir -p mlflow-data

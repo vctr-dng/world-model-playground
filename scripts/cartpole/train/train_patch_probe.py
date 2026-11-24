@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from world_model_playground.cartpole import positive_int
+from world_model_playground.cli import positive_int
 from world_model_playground.wm.data import OBSERVATION_NAMES, split_episode_ids
 from world_model_playground.wm.embeddings import load_embeddings_manifest
 from world_model_playground.wm.episodes import episode_lengths
@@ -31,6 +31,7 @@ from world_model_playground.wm.probes import (
 )
 from world_model_playground.wm.runtime import torch_device
 from world_model_playground.wm.token_cache import open_token_store, summary_features
+from world_model_playground.wm.tracking import flat_probe_metrics, tracked_run
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,19 +66,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def log_to_mlflow(experiment: str, run_name: str, record: dict, path: Path) -> None:
-    import mlflow
-
-    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-    mlflow.set_experiment(experiment)
-    with mlflow.start_run(run_name=run_name, tags={"stage": "patch_state_probe"}):
+    with tracked_run(experiment, run_name, "patch_state_probe") as mlflow:
         mlflow.log_params(record["params"])
-        metrics = {}
-        for split in ("validation", "test"):
-            result = record["metrics"][split]
-            metrics[f"{split}_rmse"] = result["rmse"]["overall"]
-            metrics[f"{split}_angle_mae_rad"] = result["angle_mae_rad"]
-            metrics |= {f"{split}_r2_{k}": v for k, v in result["r2"].items()}
-        mlflow.log_metrics(metrics)
+        mlflow.log_metrics(
+            flat_probe_metrics("validation", record["metrics"]["validation"])
+            | flat_probe_metrics("test", record["metrics"]["test"])
+        )
         mlflow.log_dict(record, "probe.json")
         mlflow.log_artifact(str(path), artifact_path="probe")
 

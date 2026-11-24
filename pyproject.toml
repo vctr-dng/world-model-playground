@@ -1,7 +1,7 @@
 [project]
 name = "world-model-playground"
 version = "0.1.0"
-description = "World Model Playground"
+description = "Latent world models on CartPole: frozen encoders, V-JEPA 2-AC and an end-to-end JEPA, judged by closed-loop planning"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -46,7 +46,22 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/world_model_playground"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.ruff]
 # Vendored third-party code stays byte-close to upstream.
 extend-exclude = ["src/world_model_playground/wm/vendor"]
 force-exclude = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # line length is the formatter's job; long comments and strings stay
+    "B905",  # zip() without strict=: choosing it per call changes behavior, so not blanket-applied
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts set environment variables (MUJOCO_GL, XLA preallocation) before importing
+# JAX and MuJoCo, so imports legitimately follow code.
+"scripts/**" = ["E402"]

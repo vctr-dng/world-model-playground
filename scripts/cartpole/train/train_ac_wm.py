@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from world_model_playground.cartpole import positive_int
+from world_model_playground.cli import non_negative_int, positive_int
 from world_model_playground.wm.ac_checkpoint import load_checkpoint
 from world_model_playground.wm.ac_world_model import (
     ACConfig,
@@ -43,27 +43,19 @@ from world_model_playground.wm.embeddings import (
     load_embeddings_manifest,
 )
 from world_model_playground.wm.episodes import episode_lengths, episode_path
-from world_model_playground.wm.eval import (
-    OBSERVATION_GROUPS,
-    ROLLOUT_HORIZONS,
-    episode_rollout_rmse,
-    group_rmse,
-    observation_rollout,
-    persistence_rollout,
-)
+from world_model_playground.wm.eval import OBSERVATION_GROUPS, group_rmse
 from world_model_playground.wm.linear import fit_linear_dynamics
-from world_model_playground.wm.predictors import decode_steps
 from world_model_playground.wm.probes import check_probe, load_probe
+from world_model_playground.wm.rollout_eval import (
+    evaluate_rollouts,
+    evaluation_horizons,
+)
 from world_model_playground.wm.runtime import torch_device
+from world_model_playground.wm.tracking import flat_rollout_metrics, tracked_run
 
 SPLITS = ("train", "validation", "test")
 
-
-def non_negative_int(value: str) -> int:
-    parsed = int(value)
-    if parsed < 0:
-        raise argparse.ArgumentTypeError("must be at least 0")
-    return parsed
+LATENT_KEY = "pooled_latent_rollout_rmse"
 
 
 def parse_args() -> argparse.Namespace:
@@ -168,73 +160,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def evaluation_horizons(stride: int) -> tuple[int, ...]:
-    """Rollout horizons where a model stepping ``stride`` control steps is exact."""
-    return tuple(h for h in (stride, *ROLLOUT_HORIZONS) if h % stride == 0)
-
-
-def evaluate(episodes, model, probe, linear_model, start_every, horizons):
-    """Decoded-observation and pooled-latent rollout RMSE of the model and baselines."""
-    observations, latents = ac_rollouts(model, probe)
-
-    def true_features(episode, start, num_steps):
-        steps = slice(start + 1, start + 1 + num_steps)
-        return decode_steps(probe, episode["features"], steps)
-
-    observation_models = {
-        "ac_model": observations,
-        "linear_model": observation_rollout(linear_model.predict_next),
-        "probe_on_true_features": true_features,
-        "persistence": persistence_rollout(),
-    }
-    latent_models = {
-        "ac_model": latents,
-        "persistence": persistence_rollout("features"),
-    }
-    return {
-        "observation_rollout_rmse": {
-            name: episode_rollout_rmse(
-                rollout, episodes, horizons=horizons, start_every=start_every
-            )
-            for name, rollout in observation_models.items()
-        },
-        "pooled_latent_rollout_rmse": {
-            name: {
-                horizon: errors["overall"]
-                for horizon, errors in episode_rollout_rmse(
-                    rollout,
-                    episodes,
-                    target="features",
-                    horizons=horizons,
-                    start_every=start_every,
-                ).items()
-            }
-            for name, rollout in latent_models.items()
-        },
-    }
-
-
-def flat_metrics(split: str, metrics: dict) -> dict[str, float]:
-    flat = {}
-    for model, horizons in metrics["observation_rollout_rmse"].items():
-        for horizon, errors in horizons.items():
-            flat[f"{split}_{model}_rmse_h{horizon}"] = errors["overall"]
-            for group in OBSERVATION_GROUPS:
-                flat[f"{split}_{model}_{group}_rmse_h{horizon}"] = group_rmse(
-                    errors, group
-                )
-    for model, horizons in metrics["pooled_latent_rollout_rmse"].items():
-        for horizon, error in horizons.items():
-            flat[f"{split}_{model}_pooled_latent_rmse_h{horizon}"] = error
-    return flat
-
-
 def log_to_mlflow(experiment: str, run_name: str, record: dict, path: Path) -> None:
-    import mlflow
-
-    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-    mlflow.set_experiment(experiment)
-    with mlflow.start_run(run_name=run_name, tags={"stage": "ac_world_model"}):
+    with tracked_run(experiment, run_name, "ac_world_model") as mlflow:
         mlflow.log_params(record["params"])
         for losses in record["training"]["losses"]:
             step = losses["iteration"]
@@ -242,8 +169,18 @@ def log_to_mlflow(experiment: str, run_name: str, record: dict, path: Path) -> N
                 {k: v for k, v in losses.items() if k != "iteration"}, step=step
             )
         mlflow.log_metrics(
-            flat_metrics("validation", record["metrics"]["validation"])
-            | flat_metrics("test", record["metrics"]["test"])
+            flat_rollout_metrics(
+                "validation",
+                record["metrics"]["validation"],
+                latent_key=LATENT_KEY,
+                latent_label="pooled_latent",
+            )
+            | flat_rollout_metrics(
+                "test",
+                record["metrics"]["test"],
+                latent_key=LATENT_KEY,
+                latent_label="pooled_latent",
+            )
         )
         mlflow.log_dict(record, "ac_wm.json")
 
@@ -362,8 +299,15 @@ def main() -> None:
             episode["tokens"] = npz_member_memmap(
                 episode_path(args.embeddings_dir, episode_id), "tokens"
             )
-        metrics[split] = evaluate(
-            episodes, model, probe, linear_model, args.start_every, horizons
+        metrics[split] = evaluate_rollouts(
+            episodes,
+            label="ac_model",
+            rollouts=ac_rollouts(model, probe),
+            probe=probe,
+            linear_model=linear_model,
+            start_every=args.start_every,
+            horizons=horizons,
+            latent_key=LATENT_KEY,
         )
 
     name = f"ac_{args.init}_k{stride}_h{args.history}_r{args.rollout_steps}"

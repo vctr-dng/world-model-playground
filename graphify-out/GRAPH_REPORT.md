@@ -1,192 +1,230 @@
-# Graph Report - world-model-playground  (2026-11-23)
+# Graph Report - chore-portfolio-cleanup  (2026-11-24)
 
 ## Corpus Check
-- 65 files · ~38,791 words
+- 83 files · ~57,247 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 816 nodes · 1456 edges · 40 communities (32 shown, 8 thin omitted)
-- Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 273 edges (avg confidence: 0.74)
+- 937 nodes · 1365 edges · 83 communities (41 shown, 42 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 77 edges (avg confidence: 0.72)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7acf9156`
+- Built from commit: `814e8a8c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- OpenCode Configuration
-- Graphify Plugin
-- Main Entry Point
-- Project Package
-- parse_args
-- run_live_rollout
-- dependencies
+- opencode.json
+- graphify.js
+- test_episodes.py
+- World models
+- cartpole.py
+- visualize_obs.py
+- episodes.py
+- train_ac_wm.py
 - collect_obs.py
-- parse_args
-- scalar_metrics
-- StateProbe
+- ACWorldModel
+- LatentPredictor
+- probes.py
 - __init__.py
-- fit_linear_dynamics
+- LinearResidualDynamics
 - test_encoders.py
 - up.sh
-- Tensor
-- main
-- ac_predictor.py
-- main
-- test_ac_world_model.py
-- CEMConfig
+- .expand
 - test_predictors.py
-- main
-- LatentMPC
+- ac_predictor.py
+- action_response.py
+- test_ac_world_model.py
+- StubEncoder
+- EpisodeClipDataset
+- latent_mpc.py
+- data.py
 - CEMPlanner
 - load_ac_encoder_backbone
-- test_episodes.py
+- .__init__
 - FrameRenderer
 - Levels of Working with World Models
 - test_wm_eval.py
 - test_probes.py
-- Evaluation
+- StateProbe
 - load_cartpole
-- test_collect_schedule.py
+- data.py
 - test_linear_model.py
 - test_cartpole_render.py
 - __init__.py
 - __init__.py
 - __init__.py
+- train_ppo.py
+- eval_lewm.py
+- planning.py
+- torch_device
+- control.py
+- eval_lewm.py
+- LatentMPC
+- embed.py
+- PlanningController
+- Getting started
+- export_dreamer.py
+- test_cli.py
+- Tensor
+- run_episodes
+- linear_dynamics
+- PPOController
+- RandomController
+- Namespace
+- Path
+- README.md
+- Namespace
+- Namespace
+- Path
+- Namespace
+- ndarray
+- Path
+- Namespace
+- Path
+- Namespace
+- Namespace
+- Namespace
+- Path
+- Namespace
+- Path
+- Namespace
+- Namespace
+- Path
+- Namespace
+- Path
+- Namespace
+- Path
 
 ## God Nodes (most connected - your core abstractions)
-1. `StateProbe` - 32 edges
-2. `main()` - 24 edges
-3. `CEMPlanner` - 24 edges
-4. `main()` - 23 edges
-5. `main()` - 22 edges
-6. `FrameRenderer` - 21 edges
-7. `ACWorldModel` - 21 edges
-8. `LatentPredictor` - 20 edges
-9. `CEMConfig` - 19 edges
-10. `main()` - 16 edges
+1. `StateProbe` - 28 edges
+2. `ACWorldModel` - 21 edges
+3. `LatentPredictor` - 20 edges
+4. `Levels of Working with World Models` - 13 edges
+5. `tiny_model()` - 13 edges
+6. `LinearResidualDynamics` - 12 edges
+7. `PlanningController` - 11 edges
+8. `LatentMPC` - 11 edges
+9. `FrozenEncoder` - 11 edges
+10. `LatentWorldModel` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `test_linear_dynamics_matches_the_numpy_model()` --calls--> `fit_linear_dynamics()`  [INFERRED]
   tests/test_planning.py → src/world_model_playground/wm/linear.py
-- `parse_args()` --indirect_call--> `positive_int()`  [INFERRED]
-  scripts/cartpole/random_agent.py → src/world_model_playground/cartpole.py
-- `main()` --calls--> `load_cartpole()`  [INFERRED]
-  scripts/cartpole/random_agent.py → src/world_model_playground/cartpole.py
-- `parse_args()` --indirect_call--> `positive_int()`  [INFERRED]
-  scripts/cartpole/train_ppo.py → src/world_model_playground/cartpole.py
-- `render_policy()` --calls--> `run_live_rollout()`  [INFERRED]
-  scripts/cartpole/train_ppo.py → src/world_model_playground/cartpole.py
+- `test_strided_step_windows()` --calls--> `step_windows()`  [INFERRED]
+  tests/test_ac_world_model.py → src/world_model_playground/wm/episodes.py
+- `test_latent_evaluator_scores_token_models_per_model_step()` --calls--> `latent_evaluator()`  [INFERRED]
+  tests/test_ac_world_model.py → src/world_model_playground/wm/planning.py
+- `test_decode_latents_stacks_history_like_the_probe_features()` --calls--> `stack_history()`  [INFERRED]
+  tests/test_planning.py → src/world_model_playground/wm/probes.py
+- `test_latent_rollout_decodes_predictions_with_the_probe()` --calls--> `StateProbe`  [INFERRED]
+  tests/test_predictors.py → src/world_model_playground/wm/probes.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (40 total, 8 thin omitted)
+## Communities (83 total, 42 thin omitted)
 
-### Community 0 - "OpenCode Configuration"
-Cohesion: 0.50
-Nodes (3): plugin, $schema, .opencode/plugins/graphify.js
+### Community 0 - "opencode.json"
+Cohesion: 0.22
+Nodes (11): fit_linear_probe(), fit_mlp_probe(), _normalized_mse(), device, ndarray, Tensor, Ridge regression on normalized features, picking the ridge on validation.      F, Trains an MLP probe and keeps the epoch with the lowest validation loss. (+3 more)
 
-### Community 2 - "Main Entry Point"
+### Community 1 - "graphify.js"
+Cohesion: 0.43
+Nodes (7): LeWM, main(), parameter_counts(), parse_args(), Namespace, Train a LeWM JEPA end to end from CartPole frames.  The encoder and the action-c, run_name()
+
+### Community 2 - "test_episodes.py"
 Cohesion: 0.09
-Nodes (30): _(), evaluate_policy(), main(), parse_args(), Namespace, Path, Train a Brax PPO agent to solve MJX CartpoleBalance., Records one deterministic policy rollout to an MP4 file. (+22 more)
+Nodes (29): evaluate_policy(), main(), parse_args(), Namespace, Path, Train a Brax PPO agent to solve MJX CartpoleBalance., Records one deterministic policy rollout to an MP4 file., Displays a deterministic policy in the live MuJoCo viewer. (+21 more)
 
-### Community 3 - "Project Package"
-Cohesion: 0.13
-Nodes (14): Brax PPO, Cartpole Balance, Docker, DreamerV3 export, Frozen encoders and state probes, Latent MPC in closed loop, Latent world model, Linear Model (+6 more)
+### Community 3 - "World models"
+Cohesion: 0.29
+Nodes (6): Documentation, Headline results, Pipeline, Quickstart, Repository layout, World Model Playground
 
-### Community 4 - "parse_args"
-Cohesion: 0.20
-Nodes (8): Any, Carry, MjxEnv, main(), Run a random agent in parallel MJX CartpoleBalance environments., Shared CartpoleBalance environment and visualization helpers., Steps a rollout while showing one state in MuJoCo's live viewer., run_live_rollout()
+### Community 4 - "cartpole.py"
+Cohesion: 0.07
+Nodes (5): load_transitions(), main(), parse_args(), Namespace, Train a linear residual world model from CartPole observation transitions.
 
-### Community 6 - "run_live_rollout"
+### Community 5 - "visualize_obs.py"
+Cohesion: 0.10
+Nodes (16): Collecting episodes, Data collection, DreamerV3 export, Perturbations around balance, Frozen encoders and state probes, Brax PPO, Expert policy, Parallel MJX Random Agent (+8 more)
+
+### Community 6 - "episodes.py"
+Cohesion: 0.18
+Nodes (9): collection(), make_episode(), Tests for episodic collections, their DreamerV3 view, and the clip dataset., Builds a valid episode whose frames encode their step index., Writes a three-episode collection with a format-2 manifest., test_to_dreamer_episode_aligns_steps(), test_to_dreamer_episode_marks_truncation_as_non_terminal(), test_validate_episode_rejects_malformed_fields() (+1 more)
+
+### Community 7 - "train_ac_wm.py"
+Cohesion: 0.33
+Nodes (5): ActionAlignment, ndarray, Converting episodic collections into DreamerV3-style step sequences.  DreamerV3, Returns the ``T+1`` step arrays of one episode in DreamerV3's layout.      ``sta, to_dreamer_episode()
+
+### Community 9 - "ACWorldModel"
 Cohesion: 0.05
-Nodes (58): ActionAlignment, main(), main(), parse_args(), Namespace, Encode an episodic Cartpole collection with a frozen pretrained encoder.  Writes, Smallest square collected resolution of at least ``size``, if any., source_resolution() (+50 more)
+Nodes (44): memmap, ac_losses(), ac_rollouts(), ACConfig, ACWorldModel, _autocast(), build_ac_model(), evaluate_ac_losses() (+36 more)
 
-### Community 7 - "dependencies"
-Cohesion: 0.50
-Nodes (3): @opencode-ai/plugin, dependencies, @opencode-ai/plugin
+### Community 10 - "LatentPredictor"
+Cohesion: 0.07
+Nodes (36): decode_steps(), evaluate_losses(), fit_predictor(), latent_rollout(), LatentPredictor, LatentWindows, load_predictor(), normalized_latent_rollout() (+28 more)
 
-### Community 8 - "collect_obs.py"
+### Community 11 - "probes.py"
 Cohesion: 0.14
-Nodes (19): action_counts(), episode_length(), fraction(), held_schedule(), make_batched_rollout(), parse_args(), Namespace, ndarray (+11 more)
+Nodes (14): check_probe(), load_probe(), probe_arrays(), Path, State probes that read the CartPole observation back out of frozen features.  A, Per-observation R² and RMSE, plus the absolute pole-angle error in radians., Restores a probe written by :func:`save_probe` and its metadata., Rejects a probe of another encoder or one that saw the test episodes. (+6 more)
 
-### Community 9 - "parse_args"
-Cohesion: 0.05
-Nodes (45): memmap, ac_losses(), ac_rollouts(), ACConfig, ACWorldModel, _autocast(), build_ac_model(), evaluate_ac_losses() (+37 more)
-
-### Community 10 - "scalar_metrics"
-Cohesion: 0.07
-Nodes (43): evaluate(), flat_metrics(), log_to_mlflow(), main(), non_negative_float(), parse_args(), Namespace, Path (+35 more)
-
-### Community 11 - "StateProbe"
-Cohesion: 0.07
-Nodes (39): flat_metrics(), log_to_mlflow(), main(), parse_args(), probe_filename(), Namespace, Path, Fit state probes on cached encoder features and compare encoders.  For each embe (+31 more)
-
-### Community 13 - "fit_linear_dynamics"
-Cohesion: 0.07
-Nodes (38): main(), parse_args(), positive_float(), Namespace, Train a linear residual world model from CartPole observation transitions., Parse a strictly positive floating-point value., load_transitions(), load_transitions() (+30 more)
+### Community 13 - "LinearResidualDynamics"
+Cohesion: 0.09
+Nodes (27): load_transitions(), partition_mask(), project_angle_pair(), ndarray, Path, Loading, validating, and splitting collected CartPole transitions., Read every array of a collection's ``transitions.npz`` into memory., Validate the observation-only transition fields required by the trainers. (+19 more)
 
 ### Community 14 - "test_encoders.py"
 Cohesion: 0.08
-Nodes (25): Dinov2Encoder, EncoderSpec, FrozenEncoder, load_encoder(), preprocess_frames(), device, dtype, Module (+17 more)
+Nodes (27): NamedTuple, Dinov2Encoder, EncoderOutput, EncoderSpec, FrozenEncoder, load_encoder(), preprocess_frames(), device (+19 more)
 
-### Community 16 - "Tensor"
-Cohesion: 0.09
-Nodes (27): Evaluator, Protocol, cartpole_reward(), decode_latents(), group_step_actions(), latent_distance(), latent_evaluator(), LatentWorldModel (+19 more)
-
-### Community 17 - "main"
-Cohesion: 0.09
-Nodes (32): PredictNext, parse_args(), Namespace, evaluate(), evaluation_horizons(), flat_metrics(), log_to_mlflow(), main() (+24 more)
+### Community 17 - "test_predictors.py"
+Cohesion: 0.08
+Nodes (34): PredictNext, slice, EpisodeClipDataset, Dataset, Tensor, PyTorch datasets over episodic CartPole collections., Fixed-length clips of frames, observations, and actions from episode shards., episode_rollout_rmse() (+26 more)
 
 ### Community 18 - "ac_predictor.py"
-Cohesion: 0.12
-Nodes (10): ACBlock, ACRoPEAttention, build_action_block_causal_attention_mask(), DropPath, MLP, Action Conditioned Vision Transformer Predictor, :param x: context tokens, Drop paths (Stochastic Depth) per sample  (when applied in main path of residual (+2 more)
-
-### Community 19 - "main"
 Cohesion: 0.11
-Nodes (21): main(), parse_args(), plot(), pose(), Namespace, ndarray, Path, Measure how world models respond to actions they were not shown.  Open-loop RMSE (+13 more)
+Nodes (11): ACBlock, ACRoPEAttention, build_action_block_causal_attention_mask(), DropPath, MLP, Action Conditioned Vision Transformer Predictor, :param x: context tokens, Drop paths (Stochastic Depth) per sample  (when applied in main path of residual (+3 more)
+
+### Community 19 - "action_response.py"
+Cohesion: 0.05
+Nodes (46): main(), parse_args(), Namespace, Path, Score a trained LeWM like the Level 1 latent models: decoded open-loop rollouts., Stores the probe in the artifact's params, where the planners look for it., record_probe(), by_episode_id() (+38 more)
 
 ### Community 20 - "test_ac_world_model.py"
-Cohesion: 0.17
-Nodes (20): Tensor, random_latents(), Tests for the V-JEPA 2-AC adapter, on tiny random-weight predictors., test_ac_rollouts_hold_each_model_step_over_its_control_steps(), test_action_encoder_reads_grouped_forces_from_pretrained_columns(), test_actions_change_the_prediction(), test_fit_runs_and_keeps_the_best_validation_weights(), test_forward_predicts_layer_normalized_tokens_for_every_step() (+12 more)
+Cohesion: 0.05
+Nodes (62): ndarray, Path, default_embeddings_dir(), embed_frames(), load_embedded_episodes(), load_embeddings_manifest(), ndarray, Path (+54 more)
 
-### Community 21 - "CEMConfig"
-Cohesion: 0.15
-Nodes (13): NamedTuple, EncoderOutput, CEMConfig, Cross-entropy method over piecewise-constant action sequences., test_cem_warm_start_advances_by_the_replanning_shift(), Tests for the replanning cadence and strided context of latent_mpc.py controller, Frames whose every pixel encodes the cart position., Tokens that are a fixed function of the frame, as a frozen encoder's are. (+5 more)
+### Community 21 - "StubEncoder"
+Cohesion: 0.24
+Nodes (8): Tests for the replanning cadence and strided context of the MPC controllers., Frames whose every pixel encodes the cart position., Tokens that are a fixed function of the frame, as a frozen encoder's are., StubEncoder, StubRenderer, test_latent_mpc_plans_every_model_step_from_strided_context(), test_latent_mpc_rejects_a_cadence_off_the_model_stride(), tiny_model()
 
-### Community 22 - "test_predictors.py"
-Cohesion: 0.13
-Nodes (17): slice, EpisodeClipDataset, Dataset, Tensor, PyTorch datasets over episodic CartPole collections., Fixed-length clips of frames, observations, and actions from episode shards., test_held_schedule_keeps_sources_and_random_actions_over_segments(), make_episodes() (+9 more)
+### Community 22 - "EpisodeClipDataset"
+Cohesion: 0.23
+Nodes (12): main(), parse_args(), plot(), pose(), Namespace, Path, Measure how world models respond to actions they were not shown.  Open-loop RMSE, Cart position and unwrapped pole angle ``(..., H, 2)``. (+4 more)
 
-### Community 23 - "main"
-Cohesion: 0.18
-Nodes (18): encode_clips(), encode_goal(), log_to_mlflow(), main(), parse_args(), plot_results(), pose_rmse(), Namespace (+10 more)
-
-### Community 24 - "LatentMPC"
-Cohesion: 0.15
-Nodes (7): LatentMPC, PlanningController, Shared CEM bookkeeping: replanning cadence, timing, and the chosen plan.      A, Per-step bookkeeping before planning; returns per-step info., Called with every new plan., CEM through a latent world model from the encoded rendered frames.      Every co, The last ``count`` entries ``step_stride`` apart, oldest first.
+### Community 23 - "latent_mpc.py"
+Cohesion: 0.31
+Nodes (8): Path, anchors(), check(), main(), Check the documentation: relative links, heading anchors, and script paths.  Run, The anchor GitHub generates for a heading., Anchors of the headings of a page, ignoring comments in code blocks., slug()
 
 ### Community 25 - "CEMPlanner"
-Cohesion: 0.15
-Nodes (11): Tensor, CEM through batched MJX rollouts of the real environment., CEM through an observation-space model rolled out from true observations., StateModelMPC, to_torch(), TrueDynamicsMPC, CEMPlanner, device (+3 more)
+Cohesion: 0.14
+Nodes (11): Evaluator, CEMConfig, CEMPlanner, device, Cross-entropy method over piecewise-constant action sequences., Receding-horizon CEM for ``batch_size`` episodes, warm-started across steps., ``shift`` is the number of control steps between successive plans,         by wh, Forgets the warm start, e.g. at the start of new episodes. (+3 more)
 
 ### Community 26 - "load_ac_encoder_backbone"
 Cohesion: 0.17
 Nodes (15): clean_keys(), ensure_checkpoint(), hf_encoder_state_dict(), load_ac_encoder_backbone(), load_checkpoint(), dtype, Module, Path (+7 more)
 
-### Community 27 - "test_episodes.py"
-Cohesion: 0.18
-Nodes (9): collection(), make_episode(), Tests for episodic collections, their DreamerV3 view, and the clip dataset., Builds a valid episode whose frames encode their step index., Writes a three-episode collection with a format-2 manifest., test_to_dreamer_episode_aligns_steps(), test_to_dreamer_episode_marks_truncation_as_non_terminal(), test_validate_episode_rejects_malformed_fields() (+1 more)
+### Community 27 - ".__init__"
+Cohesion: 0.07
+Nodes (25): Candidate directions, Models and methods, References, Simulation and training, Closed-loop control: LeWM collection, Closed-loop control: patch-token collection, Closed-loop control: pooled features, Open-loop accuracy of the decoded pose (+17 more)
 
 ### Community 28 - "FrameRenderer"
-Cohesion: 0.21
-Nodes (8): MjModel, Self, FrameRenderer, ndarray, Vertical field of view used for frames of this resolution., Renders rows of ``qpos``/``qvel`` once; prefer ``FrameRenderer`` in loops., Renders rows of ``qpos``/``qvel`` at fixed resolutions of one camera.      Every, render_frames()
+Cohesion: 0.06
+Nodes (36): Any, Carry, MjModel, MjxEnv, log_to_mlflow(), main(), parse_args(), plot_results() (+28 more)
 
 ### Community 29 - "Levels of Working with World Models"
-Cohesion: 0.15
-Nodes (12): Level 0: Use a pretrained world model as a black box, Level 1: Frozen pretrained encoder, train only the dynamics (DINO-WM style), Level 2: Train a JEPA end-to-end from pixels (LeWM style), Level 3: Compare and analyze, Level 4: Add a research contribution, Level 5: Other families of world models, Levels of Working with World Models, Open items (+4 more)
+Cohesion: 0.33
+Nodes (8): evaluate(), log_to_mlflow(), main(), parse_args(), Namespace, Path, Train an action-conditioned latent world model on cached encoder features.  A ca, Decoded-observation and latent rollout RMSE of the model and baselines.
 
 ### Community 30 - "test_wm_eval.py"
 Cohesion: 0.28
@@ -196,37 +234,73 @@ Nodes (12): as_episodes(), exact_dynamics(), make_episodes(), ndarray, Tests for
 Cohesion: 0.20
 Nodes (5): ndarray, Tests for state probes on synthetic features with a known observation decoding., Observations with a valid (cos, sin) pair, linearly mixed into features., splits(), synthetic_split()
 
-### Community 32 - "Evaluation"
-Cohesion: 0.20
-Nodes (4): PPOController, RandomController, Evaluation, Scores of candidate plans and per-candidate tensors to keep for the chosen one.
+### Community 32 - "StateProbe"
+Cohesion: 0.27
+Nodes (6): CEMPlanner, FrameRenderer, CEM through an observation-space model rolled out from true observations., StateModelMPC, to_torch(), Tensor
 
-### Community 33 - "load_cartpole"
-Cohesion: 0.22
-Nodes (8): _(), _(), camera_model(), load_cartpole(), matched_fovy(), Loads CartpoleBalance, optionally resetting across the full pole circle., Vertical field of view, in degrees, keeping the horizontal view of a 320x240 fra, test_cartpole_reward_matches_the_environment()
+### Community 42 - "eval_lewm.py"
+Cohesion: 0.25
+Nodes (7): flat_probe_metrics(), flat_rollout_metrics(), MLflow run setup and metric flattening shared by the training scripts.  MLflow t, Starts an MLflow run tagged with its pipeline ``stage`` and yields ``mlflow``., Flattens an ``evaluate`` record: observation RMSE (overall and per group)     pe, Flattens the metrics of a state probe: angle error, RMSE and per-state R²., tracked_run()
 
-### Community 34 - "test_collect_schedule.py"
-Cohesion: 0.43
-Nodes (5): Tests for the action-source schedule of collect_obs.py., run_rollout(), test_perturbations_hold_one_force_for_the_requested_length(), test_perturbations_only_start_upright_and_are_off_by_default(), zero_policy()
+### Community 43 - "planning.py"
+Cohesion: 0.12
+Nodes (20): Protocol, cartpole_reward(), decode_latents(), group_step_actions(), latent_distance(), latent_evaluator(), LatentWorldModel, project_angle() (+12 more)
+
+### Community 45 - "torch_device"
+Cohesion: 0.12
+Nodes (17): EpisodeRollout, evaluate_rollouts(), evaluation_horizons(), Open-loop rollout scoring of a latent world model against the same baselines.  L, Rollout horizons where a model stepping ``stride`` control steps is exact., Decoded-observation and latent rollout RMSE of a model and the baselines.      `, Tests for metric flattening and the shared rollout evaluation.  The flattened ke, Decodes a feature to the observations it was built from. (+9 more)
+
+### Community 46 - "control.py"
+Cohesion: 0.29
+Nodes (9): ndarray, encode_clips(), encode_goal(), pose_rmse(), Controllers for closed-loop CartPole control and the episode runner.  A controll, Pooled features and tokens of uint8 clips ``(B, L, H, W, 3)``.      In bfloat16,, Latent of an upright, centered, still pole: the same frame repeated., Episode returns and, for planners, how well they predicted reality. (+1 more)
+
+### Community 47 - "eval_lewm.py"
+Cohesion: 0.33
+Nodes (8): device, log_to_mlflow(), main(), parse_args(), Namespace, Path, Train an action-conditioned world model on cached frozen-encoder patch tokens., storage_device()
+
+### Community 49 - "LatentMPC"
+Cohesion: 0.36
+Nodes (3): LatentMPC, CEM through a latent world model from the encoded rendered frames.      Every co, The last ``count`` entries ``step_stride`` apart, oldest first.
+
+### Community 51 - "PlanningController"
+Cohesion: 0.18
+Nodes (6): PlanningController, CEM through batched MJX rollouts of the real environment., Shared CEM bookkeeping: replanning cadence, timing, and the chosen plan.      A, Per-step bookkeeping before planning; returns per-step info., Called with every new plan., TrueDynamicsMPC
+
+### Community 52 - "Getting started"
+Cohesion: 0.29
+Nodes (6): Getting started, MLflow, Requirements, Sharing a GPU, Tests and linting, Where the code lives
+
+### Community 57 - "run_episodes"
+Cohesion: 0.18
+Nodes (8): device, Running PyTorch world models alongside JAX/MJX on a single GPU., Returns the requested device, defaulting to CUDA when it is available., Stops JAX from reserving most of the GPU so PyTorch can allocate memory too., share_gpu_with_jax(), torch_device(), Tests that PyTorch world models can run next to JAX on the same GPU., test_torch_device_honours_explicit_choice()
+
+### Community 59 - "linear_dynamics"
+Cohesion: 0.17
+Nodes (11): LinearResidualDynamics, Action-conditioned ridge model that predicts the next observation delta., Evaluation, linear_dynamics(), Plan, Scores of candidate plans and per-candidate tensors to keep for the chosen one., The best candidate of the last iteration for every episode., Scores candidates by the CartPole reward of an observation-space rollout.      ` (+3 more)
+
+### Community 60 - "PPOController"
+Cohesion: 0.24
+Nodes (9): action_counts(), held_schedule(), make_batched_rollout(), Action-source schedules and the batched rollout behind ``collect_obs.py``.  Coll, Apportions the requested transition count across the three action sources., Returns an exact, reproducibly shuffled action-source schedule., Action-source schedule ``(E, T)`` and random actions ``(E, T, 1)``.      Sources, Builds a jitted rollout of parallel episodes following a source schedule.      T (+1 more)
 
 ## Knowledge Gaps
-- **24 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `@opencode-ai/plugin`, `up.sh script`, `Parallel MJX Random Agent` (+19 more)
+- **46 isolated node(s):** `Requirements`, `MLflow`, `Sharing a GPU`, `Tests and linting`, `Where the code lives` (+41 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **42 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `main()` connect `main` to `load_cartpole`, `Main Entry Point`, `run_live_rollout`, `parse_args`, `StateProbe`, `fit_linear_dynamics`, `test_encoders.py`, `main`, `CEMConfig`, `FrameRenderer`?**
-  _High betweenness centrality (0.134) - this node is a cross-community bridge._
-- **Why does `main()` connect `main` to `run_live_rollout`, `parse_args`, `scalar_metrics`, `StateProbe`, `fit_linear_dynamics`, `main`, `load_ac_encoder_backbone`?**
-  _High betweenness centrality (0.132) - this node is a cross-community bridge._
-- **Why does `StateProbe` connect `StateProbe` to `Evaluation`, `scalar_metrics`, `Tensor`, `test_ac_world_model.py`, `CEMConfig`, `test_predictors.py`, `CEMPlanner`?**
-  _High betweenness centrality (0.115) - this node is a cross-community bridge._
-- **Are the 13 inferred relationships involving `StateProbe` (e.g. with `CEMConfig` and `CEMPlanner`) actually correct?**
-  _`StateProbe` has 13 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 14 inferred relationships involving `main()` (e.g. with `load_cartpole()` and `load_policy()`) actually correct?**
-  _`main()` has 14 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 13 inferred relationships involving `CEMPlanner` (e.g. with `LatentMPC` and `PlanningController`) actually correct?**
-  _`CEMPlanner` has 13 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 18 inferred relationships involving `main()` (e.g. with `load_checkpoint()` and `ACConfig`) actually correct?**
-  _`main()` has 18 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `StateProbe` connect `opencode.json` to `LatentPredictor`, `probes.py`, `planning.py`, `LinearResidualDynamics`, `test_predictors.py`, `test_ac_world_model.py`, `CEMPlanner`, `linear_dynamics`?**
+  _High betweenness centrality (0.191) - this node is a cross-community bridge._
+- **Why does `step_windows()` connect `test_ac_world_model.py` to `LatentPredictor`, `probes.py`?**
+  _High betweenness centrality (0.138) - this node is a cross-community bridge._
+- **Why does `make_probe()` connect `LatentPredictor` to `opencode.json`, `probes.py`?**
+  _High betweenness centrality (0.116) - this node is a cross-community bridge._
+- **Are the 9 inferred relationships involving `StateProbe` (e.g. with `CEMConfig` and `CEMPlanner`) actually correct?**
+  _`StateProbe` has 9 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 2 inferred relationships involving `LatentPredictor` (e.g. with `StateProbe` and `test_latent_evaluator_scores_reward_and_goal_objectives()`) actually correct?**
+  _`LatentPredictor` has 2 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `Requirements`, `MLflow`, `Sharing a GPU` to the rest of the system?**
+  _269 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `test_episodes.py` be split into smaller, more focused modules?**
+  _Cohesion score 0.09247311827956989 - nodes in this community are weakly interconnected._

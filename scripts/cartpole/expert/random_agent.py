@@ -10,12 +10,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from world_model_playground.cartpole import (
-    load_cartpole,
-    non_negative_int,
-    positive_int,
-    run_live_rollout,
-)
+from world_model_playground.cartpole import load_cartpole, run_live_rollout
+from world_model_playground.cli import non_negative_int, positive_int
 
 
 def parse_args() -> argparse.Namespace:
