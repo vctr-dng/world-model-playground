@@ -48,6 +48,7 @@ from world_model_playground.wm.data import split_episode_ids
 from world_model_playground.wm.embeddings import (
     load_embedded_episodes,
     load_embeddings_manifest,
+    source_resolution,
 )
 from world_model_playground.wm.encoders import load_encoder
 from world_model_playground.wm.episodes import (
@@ -139,6 +140,12 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="control steps between plans, for every MPC controller; each plan's "
         "first actions run in between (default: 1)",
+    )
+    parser.add_argument(
+        "--rollout-chunk",
+        type=positive_int,
+        help="candidate sequences rolled out at once, to bound GPU memory for "
+        "token models at many episodes x candidates; same results (default: all)",
     )
     parser.add_argument("--init-std", type=float, default=0.7)
     parser.add_argument(
@@ -343,6 +350,7 @@ class LatentMPC(PlanningController):
         goal_cost: str = "sum",
         goal_metric: torch.Tensor | None = None,
         replan_every: int = 1,
+        rollout_chunk: int | None = None,
     ):
         stride = predictor.step_stride
         if replan_every % stride:
@@ -360,6 +368,7 @@ class LatentMPC(PlanningController):
         self.goal = goal
         self.goal_cost = goal_cost
         self.goal_metric = goal_metric
+        self.rollout_chunk = rollout_chunk
         # Control steps of latents, features, and actions the context reaches.
         self.keep = max(predictor.history, probe.history) * stride + 1
 
@@ -387,10 +396,16 @@ class LatentMPC(PlanningController):
     def observe(self, state, observations, qpos, qvel):
         device = self.planner.device
         output = self.encode_newest(qpos, qvel)
-        feature = output.pooled.to(device)
         latent = (
             output.tokens if self.predictor.latent_kind == "tokens" else output.pooled
         ).to(device)
+        # The probe reads what the model's ``pooled`` returns: the encoder's own
+        # pooled feature, or for token models their (spatial) summary.
+        feature = (
+            self.predictor.pooled(latent)
+            if self.predictor.latent_kind == "tokens"
+            else output.pooled.to(device)
+        )
         batch = self.planner.batch_size
         info = {"latent_error": np.full(batch, np.nan, dtype=np.float32)}
         if self.predicted_step == self.step:
@@ -432,6 +447,7 @@ class LatentMPC(PlanningController):
             goal=self.goal,
             goal_cost=self.goal_cost,
             goal_metric=self.goal_metric,
+            rollout_chunk=self.rollout_chunk,
         )
 
     def planned(self, plan) -> None:
@@ -611,7 +627,10 @@ def main() -> None:
         action_repeat=args.action_repeat,
         init_std=args.init_std,
     )
-    resolution = (manifest["input_size"], manifest["input_size"])
+    # Render as embed.py read frames: collected frames resized by the encoder,
+    # not frames rendered directly at the encoder's input size.
+    size = manifest["input_size"]
+    resolution = source_resolution(collection, size) or (size, size)
     needs_encoder = any(c.startswith("mpc-latent") for c in args.controllers)
     stride = predictor.step_stride
     if (
@@ -706,6 +725,7 @@ def main() -> None:
                 goal_cost=args.goal_cost,
                 goal_metric=goal_metric,
                 replan_every=args.replan_every,
+                rollout_chunk=args.rollout_chunk,
             )
 
         for reset in args.resets:

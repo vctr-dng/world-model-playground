@@ -29,6 +29,7 @@ from world_model_playground.wm.embeddings import (
     COPIED_FIELDS,
     default_embeddings_dir,
     embed_frames,
+    source_resolution,
     write_embedded_episode,
     write_embeddings_manifest,
 )
@@ -91,16 +92,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--device", help="torch device (default: cuda if available)")
     return parser.parse_args()
-
-
-def source_resolution(manifest: dict, size: int) -> tuple[int, int] | None:
-    """Smallest square collected resolution of at least ``size``, if any."""
-    squares = sorted(
-        entry["height"]
-        for entry in manifest["resolutions"]
-        if entry["height"] == entry["width"] and entry["height"] >= size
-    )
-    return (squares[0], squares[0]) if squares else None
 
 
 def main() -> None:

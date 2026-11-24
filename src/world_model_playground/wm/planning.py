@@ -298,6 +298,7 @@ def latent_evaluator(
     goal: torch.Tensor | None = None,
     goal_cost: str = "sum",
     goal_metric: torch.Tensor | None = None,
+    rollout_chunk: int | None = None,
 ) -> Evaluator:
     """Scores candidates by rolling the latent model out from true context.
 
@@ -314,6 +315,11 @@ def latent_evaluator(
     projected through it, instead of the model's ``goal_distance``. Extras:
     decoded ``observations`` ``(B, N, H/k, 5)`` and the
     normalized ``first_latent`` ``(B, N, *latent)``.
+
+    ``rollout_chunk`` caps how many candidate sequences roll out at once, with
+    identical results. Token models hold ``H/k * tokens * channels`` floats per
+    sequence in several tensors, which outgrows an 8 GB card at hundreds of
+    sequences.
     """
     if objective not in ("reward", "goal"):
         raise ValueError("objective must be 'reward' or 'goal'")
@@ -335,38 +341,46 @@ def latent_evaluator(
     def evaluate(actions: torch.Tensor) -> Evaluation:
         batch, candidates = actions.shape[:2]
         flat_actions = actions.flatten(0, 1)
+        grouped = group_step_actions(flat_actions, stride)
+        # Row ``i`` of the flat candidates belongs to episode ``i // candidates``.
+        owner = torch.arange(len(flat_actions), device=actions.device) // candidates
+        size = rollout_chunk or len(flat_actions)
 
-        def tile(values: torch.Tensor) -> torch.Tensor:
-            return values.repeat_interleave(candidates, dim=0)
-
-        predicted = model.rollout_normalized(
-            tile(normalized_context),
-            tile(context_actions),
-            group_step_actions(flat_actions, stride),
-        ).float()
-        observations = decode_latents(
-            probe,
-            tile(pooled_context),
-            model.pooled(model.denormalize(predicted)),
-        )
-        if objective == "reward":
-            step_actions = flat_actions[:, ::stride]
-            returns = stride * cartpole_reward(observations, step_actions).sum(1)
-        else:
-            if goal_metric is None:
-                distance = latent_distance(
-                    predicted - normalized_goal, model.goal_distance, latent_dims
-                )
+        scores, decoded, first_latents = [], [], []
+        for start in range(0, len(flat_actions), size):
+            rows = slice(start, start + size)
+            predicted = model.rollout_normalized(
+                normalized_context[owner[rows]],
+                context_actions[owner[rows]],
+                grouped[rows],
+            ).float()
+            observations = decode_latents(
+                probe,
+                pooled_context[owner[rows]],
+                model.pooled(model.denormalize(predicted)),
+            )
+            if objective == "reward":
+                step_actions = flat_actions[rows, ::stride]
+                score = stride * cartpole_reward(observations, step_actions).sum(1)
             else:
-                projected = (predicted - normalized_goal) @ goal_metric
-                distance = projected.square().mean(-1)
-            returns = -(distance[:, -1] if goal_cost == "final" else distance.sum(1))
+                if goal_metric is None:
+                    distance = latent_distance(
+                        predicted - normalized_goal, model.goal_distance, latent_dims
+                    )
+                else:
+                    projected = (predicted - normalized_goal) @ goal_metric
+                    distance = projected.square().mean(-1)
+                score = -(distance[:, -1] if goal_cost == "final" else distance.sum(1))
+            scores.append(score)
+            decoded.append(observations)
+            first_latents.append(predicted[:, 0])
+        first_latent = torch.cat(first_latents)
         return Evaluation(
-            returns.view(batch, candidates),
+            torch.cat(scores).view(batch, candidates),
             {
-                "observations": observations.view(batch, candidates, -1, 5),
-                "first_latent": predicted[:, 0].view(
-                    batch, candidates, *predicted.shape[2:]
+                "observations": torch.cat(decoded).view(batch, candidates, -1, 5),
+                "first_latent": first_latent.view(
+                    batch, candidates, *first_latent.shape[1:]
                 ),
             },
         )
