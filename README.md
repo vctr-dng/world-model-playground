@@ -455,6 +455,8 @@ above (horizon 30, 256 candidates, 4 iterations, a plan every 5 steps):
 | CEM, LeWM (probe-decoded reward) | 187.5 ± 6.6 | 36.1 ± 9.2 | 0.208 |
 | CEM, linear model | 169.3 ± 6.5 | 41.6 ± 6.6 | 0.006 |
 | CEM, LeWM (goal embedding) | 98.6 ± 10.5 | 27.4 ± 6.6 | 0.216 |
+| CEM, LeWM (goal embedding, read-out metric, summed) | 142.9 ± 9.9 | 28.0 ± 8.4 | 0.226 |
+| CEM, LeWM (goal embedding, read-out metric, last step) | 163.2 ± 9.3 | 21.4 ± 7.5 | 0.244 |
 | Random | 106.0 ± 2.0 | 23.5 ± 8.1 | |
 
 What the experiments show:
@@ -462,8 +464,8 @@ What the experiments show:
 - Planning on the reward of probe-decoded embeddings works near upright (187.5
   against 193.7 with the true dynamics) but, as with the other latent models,
   does not swing the pole up from hanging starts.
-- Planning on the distance to the embedding of an upright frame, which is how
-  LeWM plans, does not work here: 98.6, no better than random, with the
+- Planning on the Euclidean distance to the embedding of an upright frame, which is
+  how LeWM plans, does not work here: 98.6, no better than random, with the
   distance summed over the horizon (default) or at its last step only
   (`latent_mpc.py --goal-cost final`, 100.2 ± 3.3 on the 10,000-iteration
   model, against 98.0 ± 10.0). The embeddings carry the state; the Euclidean
@@ -474,6 +476,17 @@ What the experiments show:
   steps). SIGReg spreads variance over many directions (the top 5 principal
   directions hold 16% of it), and the few that carry the state are drowned out
   in a Euclidean distance.
+- Measuring the same goal distance through a read-out of the state fixes most
+  of it. `latent_mpc.py --goal-metric readout` fits a ridge regression from the
+  training embeddings to the standardized state and scores the squared distance
+  after projecting the latent difference through it
+  (`wm.planning.fit_readout_metric`). On the 30,000-iteration model it ranks
+  which of two near-upright steps is closer to upright correctly 87% of the time
+  (Euclidean: 49%, chance), and planning with it reaches 142.9 ± 9.9 on balance
+  summed over the horizon and 163.2 ± 9.3 with the last step only, the cost LeWM
+  uses, against 98.6 for the Euclidean distance and 106.0 for random actions.
+  That is on par with the linear model (169.3) but still short of the
+  probe-decoded reward (187.5), and it does not help from hanging starts.
 - SIGReg is what makes the embeddings usable for prediction. With
   `--sigreg-weight 0` the encoder still keeps the state, in a tiny
   spread: a probe on its embeddings passes the gate (MLP pose R² 0.996, 0.998, 0.994),
